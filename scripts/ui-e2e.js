@@ -60,6 +60,24 @@ async function main(){
   await retry(()=>cdp.eval(`document.readyState==='complete' && !!document.getElementById('appShell') && !document.getElementById('appShell').classList.contains('hidden')`),20000,150);
   await retry(()=>cdp.eval(`!!document.getElementById('liveTrafficChart')`),15000,150);
 
+  for(const route of ['dns','web']) {
+    await cdp.eval(`document.querySelector('[data-route="${route}"]').click()`);
+    await retry(()=>cdp.eval(`!!document.getElementById('accessOlder')`));
+    assert(await cdp.eval(`document.getElementById('accessResults').textContent.includes('capacity')`),'access retention counters missing');
+    await cdp.eval(`document.getElementById('accessQuery').focus();document.getElementById('accessQuery').value='unsent query'`);
+    await sleep(1300);
+    assert(await cdp.eval(`document.activeElement.id==='accessQuery' && document.getElementById('accessQuery').value==='unsent query'`),'live access refresh replaced search input');
+    await cdp.eval(`document.getElementById('accessPause').click()`);
+    const paused=await cdp.eval(`document.getElementById('accessResults').innerHTML`);
+    await sleep(1300);
+    assert(await cdp.eval(`document.getElementById('accessResults').innerHTML`)===paused,'paused access view changed');
+    await cdp.eval(`document.getElementById('accessPause').click()`);
+    await retry(()=>cdp.eval(`document.getElementById('accessResults').textContent.includes('Live')`));
+  }
+  console.log('PASS: DNS and web menus, live refresh, stable search input and pause/resume');
+  await cdp.eval(`location.hash='#/overview'`);
+  await retry(()=>cdp.eval(`!!document.getElementById('liveTrafficChart')`));
+
   // Overview: no legacy acquisition section, all top KPIs are drill-down links.
   const overview=await cdp.eval(`(()=>({legacy:document.body.innerText.includes('Interface Acquisition'),kpis:[...document.querySelectorAll('.security-kpis .clickable-kpi')].map(x=>({label:x.querySelector('.kpi-label')?.textContent,href:x.getAttribute('href')})),live:!!document.getElementById('liveTrafficChart')}))()`);
   assert(!overview.legacy,'legacy Interface Acquisition still visible');

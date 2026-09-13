@@ -3,7 +3,7 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-09-13T00:00:00Z",
+    "timestamp": "2026-09-13T19:40:56Z",
     "component": {
       "type": "application",
       "name": "netprobe-ir",
@@ -13,7 +13,7 @@
     }
   },
   "components": [
-    {"type":"file","name":"netprobe-linux-amd64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"df1cc7c181c92818a21e211779ba40697a00b267cbf5bc05359f776ba51f5ef7"}]},
-    {"type":"file","name":"netprobe-linux-arm64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"7359159e052239ace554ca185b07f4755f0f777f2a1d51eb661c94887aa1da4c"}]}
+    {"type":"file","name":"netprobe-linux-amd64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"1e560eb9da98e6d24b4d7ae26b5c0ae987b2f5124d5f274a4f16928891fac511"}]},
+    {"type":"file","name":"netprobe-linux-arm64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"0abc791d7a4bbe40d1aa58433d09aff6fcacec8158b807755be5f60994d660e5"}]}
   ]
 }

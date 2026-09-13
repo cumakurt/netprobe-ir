@@ -18,16 +18,20 @@ import (
 )
 
 type stream struct {
-	init    bool
-	next    uint32
-	buf     []byte
-	pending map[uint32][]byte
+	init           bool
+	next           uint32
+	buf            []byte
+	pending        map[uint32][]byte
+	observedHeader bool
 }
 
 type flowState struct {
-	tx   stream
-	rx   stream
-	info model.DPIInfo
+	tx                stream
+	rx                stream
+	info              model.DPIInfo
+	observationTX     stream
+	observationRX     stream
+	observationSource string
 }
 
 type Engine struct {
@@ -72,6 +76,11 @@ func (e *Engine) filterPack(i *model.DPIInfo) {
 }
 
 func (e *Engine) Inspect(flowID string, dir model.Direction, p *decode.Packet) model.DPIInfo {
+	info, _ := e.InspectObserved(flowID, dir, p)
+	return info
+}
+
+func (e *Engine) InspectObserved(flowID string, dir model.Direction, p *decode.Packet) (info model.DPIInfo, observations []model.DPIInfo) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	st := e.states[flowID]
@@ -79,6 +88,21 @@ func (e *Engine) Inspect(flowID string, dir model.Direction, p *decode.Packet) m
 		st = &flowState{}
 		e.states[flowID] = st
 	}
+	hadTLS := st.info.TLS != nil
+	previousSNI := ""
+	if hadTLS {
+		previousSNI = st.info.TLS.SNI
+	}
+	hadHTTP2 := st.info.HTTP2 != nil
+	observations = observeMessages(st, p, e.max)
+	defer func() {
+		if info.TLS != nil && (!hadTLS || previousSNI == "" && info.TLS.SNI != "") {
+			observations = append(observations, info)
+		}
+		if !hadHTTP2 && info.HTTP2 != nil {
+			observations = append(observations, info)
+		}
+	}()
 	// Stateless/packet-level recognizers first.
 	if p.Protocol == "UDP" && (p.SrcPort == 53 || p.DstPort == 53) {
 		if d, ok := parseDNS(p.Payload); ok {
@@ -103,7 +127,7 @@ func (e *Engine) Inspect(flowID string, dir model.Direction, p *decode.Packet) m
 			applyPortHint(&st.info, p)
 		}
 		e.filterPack(&st.info)
-		return clone(st.info)
+		return clone(st.info), observations
 	}
 	var s *stream
 	if dir == model.DirectionOutbound {
@@ -192,10 +216,20 @@ func (e *Engine) Inspect(flowID string, dir model.Direction, p *decode.Packet) m
 		applyPortHint(&st.info, p)
 	}
 	e.filterPack(&st.info)
-	return clone(st.info)
+	return clone(st.info), observations
 }
 
-func clone(in model.DPIInfo) model.DPIInfo { return in }
+func clone(in model.DPIInfo) model.DPIInfo {
+	if in.HTTP != nil {
+		h := *in.HTTP
+		in.HTTP = &h
+	}
+	if in.TLS != nil {
+		t := *in.TLS
+		in.TLS = &t
+	}
+	return in
+}
 
 func appendSegment(s *stream, seq uint32, data []byte, max int) {
 	if len(data) == 0 || len(s.buf) >= max {
@@ -469,7 +503,7 @@ func parseDNS(b []byte) (model.DNSInfo, bool) {
 	qd := int(binary.BigEndian.Uint16(b[4:6]))
 	an := int(binary.BigEndian.Uint16(b[6:8]))
 	flags := binary.BigEndian.Uint16(b[2:4])
-	d := model.DNSInfo{ResponseCode: uint8(flags & 0x0f)}
+	d := model.DNSInfo{TransactionID: binary.BigEndian.Uint16(b[:2]), IsResponse: flags&0x8000 != 0, ResponseCode: uint8(flags & 0x0f)}
 	pos := 12
 	if qd > 0 {
 		name, npos, ok := dnsName(b, pos, 0)
@@ -478,12 +512,14 @@ func parseDNS(b []byte) (model.DNSInfo, bool) {
 		}
 		d.Query = name
 		d.QType = binary.BigEndian.Uint16(b[npos : npos+2])
+		d.Questions = append(d.Questions, model.DNSQuestion{Query: name, QType: d.QType})
 		pos = npos + 4
 		for q := 1; q < qd; q++ {
-			_, npos, ok = dnsName(b, pos, 0)
+			name, npos, ok = dnsName(b, pos, 0)
 			if !ok || npos+4 > len(b) {
 				return d, false
 			}
+			d.Questions = append(d.Questions, model.DNSQuestion{Query: name, QType: binary.BigEndian.Uint16(b[npos : npos+2])})
 			pos = npos + 4
 		}
 	}

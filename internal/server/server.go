@@ -84,6 +84,7 @@ func firstNonEmpty(v, fallback string) string {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/access/", s.guard("read:packets", s.accessAPI))
 	// Public authentication/bootstrap routes. Static assets are public so the login shell can render.
 	mux.HandleFunc("/api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("/api/v1/auth/login", s.login)

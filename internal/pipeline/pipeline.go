@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"netprobe-ir/internal/accesslog"
 	"netprobe-ir/internal/analyst"
 	"netprobe-ir/internal/analytics"
 	"netprobe-ir/internal/anomaly"
@@ -80,6 +81,7 @@ type captureSession struct {
 }
 
 type Engine struct {
+	AccessLog        *accesslog.Store
 	Config           config.Config
 	Started          time.Time
 	Store            *flow.Store
@@ -152,7 +154,7 @@ type Engine struct {
 func New(c config.Config) *Engine {
 	an := anomaly.New(anomaly.Config{ExfiltrationBytes: c.Anomaly.ExfiltrationMB << 20, FanoutDestinations: c.Anomaly.FanoutDestinations, PortScanPorts: c.Anomaly.PortScanPorts, BurstConnections: c.Anomaly.BurstConnections, BeaconMinSamples: c.Anomaly.BeaconMinSamples, BeaconMaxJitter: c.Anomaly.BeaconMaxJitter, DNSEntropyThreshold: c.Anomaly.DNSEntropyThreshold})
 	id := ids.New(ids.Config{Enabled: c.IDS.Enabled, HomeNets: c.IDS.HomeNets, PortScanPorts: c.IDS.PortScanPorts, HostSweepHosts: c.IDS.HostSweepHosts, WindowSeconds: c.IDS.WindowSeconds, DNSHighEntropyQueries: c.IDS.DNSHighEntropyQueries, NXDomainThreshold: c.IDS.NXDomainThreshold, IOCFile: c.IDS.IOCFile, RulesFile: c.IDS.RulesFile, RulesSignature: c.IDS.RulesSignature, RulesTrustedPublicKey: c.IDS.RulesTrustedPublicKey, RequireSignedRules: c.IDS.RequireSignedRules, MaxFindings: c.IDS.MaxFindings, RuleLabMode: c.IDS.RuleLabMode})
-	e := &Engine{Config: c, Started: time.Now(), Store: flow.New(time.Duration(c.Capture.FlowIdleSeconds) * time.Second), DPI: dpi.New(c.DPI.MaxStreamBytes), Proc: procmap.New(), Anomaly: an, IDS: id, frames: make(chan capture.Frame, 16384), packets: make([]model.PacketSummary, 0, packetHistoryLimit), runtimeEvents: make([]model.RuntimeEvent, 0, 2000), captures: map[string]*captureSession{}, attributionBackend: "proc"}
+	e := &Engine{AccessLog: accesslog.New(), Config: c, Started: time.Now(), Store: flow.New(time.Duration(c.Capture.FlowIdleSeconds) * time.Second), DPI: dpi.New(c.DPI.MaxStreamBytes), Proc: procmap.New(), Anomaly: an, IDS: id, frames: make(chan capture.Frame, 16384), packets: make([]model.PacketSummary, 0, packetHistoryLimit), runtimeEvents: make([]model.RuntimeEvent, 0, 2000), captures: map[string]*captureSession{}, attributionBackend: "proc"}
 	e.Quality = detectionquality.New(filepath.Join(c.DataDir, "detection-quality", "runs.json"))
 	e.Analytics = analytics.Open(filepath.Join(c.DataDir, "analytics", "events.jsonl"), c.Analytics.MaxEvents)
 	e.DNSGraph = dnsgraph.New()
@@ -602,7 +604,7 @@ func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 		localPort, remotePort = p.DstPort, p.SrcPort
 	}
 	id := flow.Key(p, localIP, localPort, remoteIP, remotePort)
-	di := e.DPI.Inspect(id, dir, p)
+	di, observations := e.DPI.InspectObserved(id, dir, p)
 	f, created := e.Store.Observe(p, proc, attr, di, localIP, localPort, remoteIP, remotePort, dir)
 	if attributeProcess && created && e.NetworkBaseline != nil {
 		_ = e.NetworkBaseline.Observe(f)
@@ -621,6 +623,7 @@ func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 		e.TLSIntel.Observe(f)
 	}
 	packetID := e.recordPacket(p, proc, attr, di, id, dir)
+	e.recordAccess(p, f, observations, created)
 	decision := e.SmartPolicy.Decide(p, f)
 	if e.Recorder != nil {
 		if evidenceFrame, ok := smartpcap.Apply(decision, p, fr); ok && !e.Recorder.Record(evidenceFrame) {

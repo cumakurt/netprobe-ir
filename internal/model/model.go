@@ -32,11 +32,19 @@ type ProcessInfo struct {
 	Attribution         string `json:"attribution,omitempty"`
 }
 
+type DNSQuestion struct {
+	Query string `json:"query"`
+	QType uint16 `json:"qtype"`
+}
+
 type DNSInfo struct {
-	Query        string   `json:"query,omitempty"`
-	QType        uint16   `json:"qtype,omitempty"`
-	ResponseCode uint8    `json:"response_code,omitempty"`
-	Answers      []string `json:"answers,omitempty"`
+	TransactionID uint16        `json:"transaction_id"`
+	IsResponse    bool          `json:"is_response"`
+	Questions     []DNSQuestion `json:"questions,omitempty"`
+	Query         string        `json:"query,omitempty"`
+	QType         uint16        `json:"qtype,omitempty"`
+	ResponseCode  uint8         `json:"response_code,omitempty"`
+	Answers       []string      `json:"answers,omitempty"`
 }
 
 type HTTP2Info struct {

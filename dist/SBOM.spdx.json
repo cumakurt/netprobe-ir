@@ -4,10 +4,10 @@
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "NetProbe IR 1.0.0 release",
   "documentNamespace": "https://github.com/cumakurt/netprobe-ir/releases/1.0.0/spdx",
-  "creationInfo": {"created":"2026-09-13T00:00:00Z","creators":["Organization: NetProbe IR","Person: Cuma KURT"]},
+  "creationInfo": {"created":"2026-09-13T19:40:56Z","creators":["Organization: NetProbe IR","Person: Cuma KURT"]},
   "packages": [{"name":"netprobe-ir","SPDXID":"SPDXRef-Package-NetProbeIR","versionInfo":"1.0.0","downloadLocation":"NOASSERTION","licenseConcluded":"GPL-3.0-only","licenseDeclared":"GPL-3.0-only","filesAnalyzed":false}],
   "files": [
-    {"fileName":"dist/netprobe-linux-amd64","SPDXID":"SPDXRef-File-amd64","checksums":[{"algorithm":"SHA256","checksumValue":"df1cc7c181c92818a21e211779ba40697a00b267cbf5bc05359f776ba51f5ef7"}]},
-    {"fileName":"dist/netprobe-linux-arm64","SPDXID":"SPDXRef-File-arm64","checksums":[{"algorithm":"SHA256","checksumValue":"7359159e052239ace554ca185b07f4755f0f777f2a1d51eb661c94887aa1da4c"}]}
+    {"fileName":"dist/netprobe-linux-amd64","SPDXID":"SPDXRef-File-amd64","checksums":[{"algorithm":"SHA256","checksumValue":"1e560eb9da98e6d24b4d7ae26b5c0ae987b2f5124d5f274a4f16928891fac511"}]},
+    {"fileName":"dist/netprobe-linux-arm64","SPDXID":"SPDXRef-File-arm64","checksums":[{"algorithm":"SHA256","checksumValue":"0abc791d7a4bbe40d1aa58433d09aff6fcacec8158b807755be5f60994d660e5"}]}
   ]
 }

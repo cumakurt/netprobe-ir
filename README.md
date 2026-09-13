@@ -1134,3 +1134,7 @@ Copyright (C) 2026 Cuma KURT <cumakurt@gmail.com>
 - Repository: https://github.com/cumakurt/netprobe-ir
 
 Read `LICENSE` before redistribution or creation of derivative works, and see `docs/SECURITY.md` for security reporting guidance.
+
+### DNS and web access analysis
+
+Dedicated **DNS Queries** and **Web Access** menus refresh captured observations every second, with search, pause/resume and cursor pagination. See [capture coverage, retention limits and API](docs/DNS_WEB_ANALYSIS.md).
