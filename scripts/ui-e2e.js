@@ -168,8 +168,54 @@ async function main(){
   await retry(()=>cdp.eval(`!!document.getElementById('graphAsset')`)); const gv=await cdp.eval(`document.getElementById('graphAsset').value`); assert(gv===(asset.ip||asset.name),'asset graph pivot did not preserve context');
   console.log('PASS: Asset → Traffic and Asset → Investigation Graph navigation');
 
-  // Notification management UI loads and masks secrets after save.
+  // Exporter forms retain drafts, focus and selection across real telemetry frames.
   await cdp.eval(`location.hash='#/system'`); await retry(()=>cdp.eval(`!!document.getElementById('notifEmailEnabled')`),15000,200);
+  await retry(()=>cdp.eval(`!!document.getElementById('syslogName') && !!document.getElementById('flowName')`));
+  await cdp.send('Network.enable');
+  let telemetryFrames=0;
+  cdp.ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.method==='Network.webSocketFrameReceived')telemetryFrames++});
+  for(const kind of ['syslog','flow']){
+    const protocolID=kind==='syslog'?'syslogTransport':'flowProtocol';
+    const protocol=kind==='syslog'?'tcp':'netflow9';
+    for(const editing of [false,true]){
+      if(editing){
+        await cdp.eval(`document.querySelector('[data-action="${kind}-edit"]').click()`);
+        await retry(()=>cdp.eval(`!!document.getElementById('${kind}Id')?.value`));
+      }
+      const name=`Browser ${kind} ${editing?'edited':'new'}`;
+      await cdp.eval(`(()=>{
+        const get=id=>document.getElementById(id);
+        get('${kind}Name').value=${JSON.stringify(name)};
+        get('${kind}Host').value='127.0.0.1';
+        get('${kind}Port').value='15514';
+        get('${protocolID}').value='${protocol}';
+        get('${kind}Enabled').checked=false;
+        if('${kind}'==='syslog')document.querySelector('.syslog-cat').checked=false;
+        window.exportDraftInput=get('${kind}Name');
+        window.exportDraftInput.focus();window.exportDraftInput.setSelectionRange(2,5);
+      })()`);
+      const before=telemetryFrames;
+      await retry(()=>telemetryFrames>=before+2,10000,100);
+      await sleep(250);
+      assert(await cdp.eval(`(()=>{
+        const get=id=>document.getElementById(id),input=get('${kind}Name');
+        return input===window.exportDraftInput && input===document.activeElement &&
+          input.value===${JSON.stringify(name)} && input.selectionStart===2 && input.selectionEnd===5 &&
+          get('${kind}Host').value==='127.0.0.1' && get('${kind}Port').value==='15514' &&
+          get('${protocolID}').value==='${protocol}' && !get('${kind}Enabled').checked &&
+          ('${kind}'!=='syslog'||!document.querySelector('.syslog-cat').checked);
+      })()`),`${kind} ${editing?'edit':'add'} draft/focus lost during telemetry`);
+      await cdp.eval(`document.querySelector('[data-action="${kind}-save"]').click()`);
+      await retry(async()=>{
+        const data=await (await fetch(base+'/api/v1/export/'+kind)).json();
+        return (data.destinations||data.collectors||[]).some(x=>x.name===name && x.port===15514 && !x.enabled);
+      });
+      await retry(()=>cdp.eval(`document.getElementById('${kind}Name')?.value===''`));
+    }
+  }
+  console.log('PASS: Syslog and Flow add/edit retain drafts and focus during telemetry, and save successfully');
+
+  // Notification management UI loads and masks secrets after save.
   const dummyToken='123456:abcdefghijklmnopqrstuvwxyzABCDE12345';
   await cdp.eval(`(()=>{document.getElementById('notifSMTPPassword').value='browser-secret';document.getElementById('notifBotToken').value='${dummyToken}';document.querySelector('[data-action="notifications-save"]').click();return true})()`);
   await retry(()=>cdp.eval(`document.getElementById('notifSMTPPassword')?.value==='' && /Configured/.test(document.getElementById('notifSMTPPassword')?.placeholder||'')`),10000,200);

@@ -28,6 +28,8 @@ Decode -> Flow -> DPI -> IDS / anomaly
 
 Configure destinations from **System Settings -> Remote Syslog**. Multiple enabled targets run independently.
 
+System Settings does not redraw on live telemetry updates, so exporter forms retain input and focus while you edit. Use **Refresh exporters** to reload exporter settings and delivery statistics, or the console refresh button to update capture health.
+
 ### Transports and formats
 
 - UDP Syslog.
