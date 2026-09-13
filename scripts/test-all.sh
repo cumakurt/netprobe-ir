@@ -109,6 +109,8 @@ trap 'rm -rf "$STAGE"' EXIT
 [[ -x "$STAGE/usr/local/sbin/netprobe-ir" ]]
 [[ -L "$STAGE/usr/local/sbin/netprobe" ]]
 [[ -f "$STAGE/etc/netprobe-ir/config.json" ]]
+grep -F 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET AF_NETLINK' "$STAGE/etc/systemd/system/netprobe-ir.service" >/dev/null
+grep -F '[9/9] Running post-install verification' /tmp/netprobe-install-stage.log >/dev/null
 [[ -f "$STAGE/var/lib/netprobe-ir/auth/users.json" ]]
 [[ "$(stat -c '%a' "$STAGE/var/lib/netprobe-ir/auth/users.json")" == "600" ]]
 [[ -f "$STAGE/usr/local/share/doc/netprobe-ir/LICENSE" ]]

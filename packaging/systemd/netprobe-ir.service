@@ -21,7 +21,8 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET
+# AF_NETLINK is required by Go's interface discovery (net.Interfaces).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET AF_NETLINK
 CapabilityBoundingSet=CAP_NET_RAW CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_SYS_PTRACE
 AmbientCapabilities=CAP_NET_RAW CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE CAP_SYS_PTRACE
 

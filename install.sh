@@ -15,7 +15,7 @@ SOURCE_MODE="auto"
 TMPDIR_INSTALL=""
 LOGFILE=""
 STEP_NO=0
-STEP_TOTAL=8
+STEP_TOTAL=9
 
 if [ -t 1 ] 2>/dev/null; then
   C_RESET='\033[0m'; C_BLUE='\033[34m'; C_GREEN='\033[32m'; C_YELLOW='\033[33m'; C_RED='\033[31m'; C_BOLD='\033[1m'
@@ -125,7 +125,7 @@ fi
 ok "$DISTRO_NAME · architecture $ARCH"
 
 step "Checking runtime and installer requirements"
-for cmd in uname id mkdir cp mv chmod chown ln rm grep awk sed install date tail mktemp; do
+for cmd in uname id mkdir cp mv chmod chown ln rm grep awk sed install date tail mktemp sleep; do
   command -v "$cmd" >/dev/null 2>&1 || die "Required base command '$cmd' was not found. Install your distribution's base/core utilities package."
 done
 HASH_TOOL=""
@@ -367,8 +367,14 @@ if [ "$ROOTFS" = "/" ]; then
   command -v kcat >/dev/null 2>&1 && info "Optional capability: kcat detected for Kafka streaming." || info "Optional capability: kcat not installed; Kafka adapter remains unavailable until installed."
   command -v bpftrace >/dev/null 2>&1 && info "Optional capability: bpftrace detected for eBPF attribution." || info "Optional capability: bpftrace not installed; process attribution uses /proc fallback."
   if [ "$INIT" = "systemd" ] && [ "$NO_START" -eq 0 ]; then
+    # Type=simple can make `systemctl restart` succeed before the daemon has
+    # completed startup. Give fast startup failures time to reach systemd.
+    sleep 1
     if systemctl is-active --quiet netprobe-ir; then ok "netprobe-ir.service is active."
-    else warn "netprobe-ir.service is not active; inspect: journalctl -u netprobe-ir"
+    else
+      run_quiet systemctl status netprobe-ir --no-pager || true
+      run_quiet journalctl -u netprobe-ir -n 40 --no-pager || true
+      die "netprobe-ir.service failed to remain active. Inspect: journalctl -u netprobe-ir"
     fi
   fi
 else
