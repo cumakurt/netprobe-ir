@@ -1,0 +1,16 @@
+title: Suspicious Python TLS to rare resolver
+id: NP-SIGMA-1001
+status: experimental
+level: high
+logsource:
+  product: linux
+  service: network
+  category: network_connection
+detection:
+  selection:
+    Image: python3
+    Protocol: tls
+    DestinationIp:
+      - 1.1.1.1
+      - 8.8.8.8
+  condition: selection

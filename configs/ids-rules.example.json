@@ -1,0 +1,44 @@
+[
+  {
+    "id": "LOCAL-HTTP-ADMIN-001",
+    "enabled": true,
+    "title": "Sensitive admin path reached",
+    "description": "Example local policy rule for access to a protected administrative path.",
+    "severity": "high",
+    "confidence": 90,
+    "verdict": "policy_exposure",
+    "category": "local-policy",
+    "tactic": "Initial Access",
+    "mitre": [
+      "T1190"
+    ],
+    "tags": [
+      "custom",
+      "http",
+      "admin"
+    ],
+    "protocol": "HTTP",
+    "field": "http.path",
+    "operator": "regex",
+    "value": "(?i)^/(admin|management)(/|\\?|$)",
+    "status": "enabled"
+  },
+  {
+    "id": "LOCAL-DNS-SUFFIX-001",
+    "enabled": true,
+    "title": "Locally prohibited DNS suffix",
+    "description": "Example rule showing a case-insensitive DNS suffix match.",
+    "severity": "medium",
+    "confidence": 95,
+    "verdict": "policy_exposure",
+    "category": "local-policy",
+    "tags": [
+      "custom",
+      "dns"
+    ],
+    "field": "dns.query",
+    "operator": "suffix",
+    "value": ".blocked.example",
+    "status": "test"
+  }
+]

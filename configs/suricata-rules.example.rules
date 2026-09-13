@@ -1,0 +1,1 @@
+alert tcp any any -> $HOME_NET 443 (msg:"Example suspicious TLS payload marker"; flow:to_server,established; content:"evil"; nocase; sid:9000001; rev:1; classtype:trojan-activity; reference:url,example.invalid/rule;)

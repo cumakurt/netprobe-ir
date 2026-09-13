@@ -1,0 +1,4 @@
+[
+  {"cidr":"203.0.113.0/24","asn":64500,"organization":"Example Security Lab","country":"ZZ","source":"local-curated"},
+  {"cidr":"2001:db8:abcd::/48","asn":64501,"organization":"Example IPv6 Lab","country":"ZZ","source":"local-curated"}
+]

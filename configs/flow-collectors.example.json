@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "collectors": [
+    {
+      "id": "ipfix-primary",
+      "name": "Primary IPFIX Collector",
+      "enabled": true,
+      "host": "192.0.2.50",
+      "port": 4739,
+      "protocol": "ipfix",
+      "source_interface": "",
+      "observation_domain": 1001,
+      "active_timeout_seconds": 60,
+      "inactive_timeout_seconds": 15,
+      "template_refresh_seconds": 30,
+      "sampling_rate": 1,
+      "queue_size": 4096,
+      "agent_address": "192.0.2.10"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "destinations": [
+    {
+      "id": "primary-siem",
+      "name": "Primary SIEM TLS",
+      "enabled": true,
+      "host": "siem.example.net",
+      "port": 6514,
+      "transport": "tls",
+      "format": "rfc5424",
+      "framing": "octet-counting",
+      "facility": 16,
+      "severity": 6,
+      "hostname": "netprobe-sensor-01",
+      "categories": ["security", "anomaly", "dns", "tls", "flow", "system"],
+      "queue_size": 4096,
+      "tls": {
+        "insecure_skip_verify": false,
+        "ca_file": "/etc/netprobe-ir/siem-ca.pem",
+        "server_name": "siem.example.net"
+      }
+    }
+  ]
+}

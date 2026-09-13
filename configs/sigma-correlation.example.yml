@@ -1,0 +1,11 @@
+title: Brute force followed by authentication activity
+id: NP-SIGMA-CORR-1001
+correlation:
+  type: temporal_ordered
+  rules:
+    - failed_login
+    - successful_login
+  group-by:
+    - SourceIp
+    - User
+  timespan: 10m

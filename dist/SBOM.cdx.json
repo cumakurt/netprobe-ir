@@ -1,0 +1,19 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-13T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "netprobe-ir",
+      "version": "1.0.0",
+      "licenses": [{"license":{"id":"GPL-3.0-only"}}],
+      "externalReferences": [{"type":"vcs","url":"https://github.com/cumakurt/netprobe-ir"}]
+    }
+  },
+  "components": [
+    {"type":"file","name":"netprobe-linux-amd64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"df1cc7c181c92818a21e211779ba40697a00b267cbf5bc05359f776ba51f5ef7"}]},
+    {"type":"file","name":"netprobe-linux-arm64","version":"1.0.0","hashes":[{"alg":"SHA-256","content":"7359159e052239ace554ca185b07f4755f0f777f2a1d51eb661c94887aa1da4c"}]}
+  ]
+}

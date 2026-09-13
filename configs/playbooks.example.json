@@ -1,0 +1,10 @@
+[
+  {
+    "id":"pb-confirmed-malware",
+    "name":"Confirmed malware containment",
+    "enabled":true,
+    "mode":"approval_required",
+    "condition":{"min_severity":"high","min_confidence":90,"verdicts":["confirmed_ioc","signature_match"]},
+    "actions":[{"type":"create_case"},{"type":"protect_pcap"},{"type":"block_ip","ttl_seconds":900}]
+  }
+]

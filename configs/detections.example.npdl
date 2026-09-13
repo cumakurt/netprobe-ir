@@ -1,0 +1,26 @@
+# NetProbe Detection Language (NPDL) examples.
+# Non-Turing-complete by design: no loops, imports, shell, filesystem or network access.
+
+rule suspicious_python_tls
+ title Suspicious Python outbound TLS
+ severity high
+ confidence 85
+ mitre T1071.001,T1059.006
+ when process ~ python AND application ~ TLS AND direction = outbound
+end
+
+rule unexpected_admin_protocol
+ title Unexpected remote administration service
+ severity medium
+ confidence 75
+ mitre T1021
+ when application ~ RDP AND direction = outbound
+end
+
+rule reconstructed_executable
+ title Reconstructed executable transferred over the network
+ severity high
+ confidence 90
+ mitre T1105
+ when file_name ~ .exe
+end

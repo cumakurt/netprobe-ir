@@ -1,0 +1,5 @@
+*.log
+*.pcap
+*.pcapng
+/tmp/
+.coverage/

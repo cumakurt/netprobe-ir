@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>NetProbe IR — Security & Network Forensics Console</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="auth-gate" id="authGate">
+    <div class="auth-card">
+      <div class="auth-brand"><div class="brand-mark large">NP</div><div><div class="brand-name">NetProbe <span>IR</span></div><div class="brand-sub">Secure Network Detection & Forensics Console</div></div></div>
+      <div id="loginPanel">
+        <div class="auth-heading"><h1>Sign in</h1><p>Authenticate to access live capture, security findings and forensic evidence.</p></div>
+        <form id="loginForm" class="auth-form">
+          <label>Username<input id="loginUsername" autocomplete="username" value="admin" required></label>
+          <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+          <label class="hidden" id="totpLoginRow">MFA / recovery code<input id="loginTOTP" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></label>
+          <div class="auth-error hidden" id="loginError"></div>
+          <button class="btn primary auth-submit" type="submit">Sign in</button>
+          <a class="btn auth-oidc hidden" id="oidcLogin" href="/api/v1/auth/oidc/login">Sign in with SSO</a>
+        </form>
+      </div>
+      <div id="forcePasswordPanel" class="hidden">
+        <div class="auth-heading"><h1>Set a new password</h1><p>The bootstrap password must be replaced before the console can be used.</p></div>
+        <form id="forcePasswordForm" class="auth-form">
+          <label>Current password<input id="forceCurrentPassword" type="password" autocomplete="current-password" required></label>
+          <label>New password<input id="forceNewPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+          <label>Confirm new password<input id="forceConfirmPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+          <div class="auth-hint">Use at least 12 characters with upper/lower-case letters, a number and a symbol.</div>
+          <div class="auth-error hidden" id="forcePasswordError"></div>
+          <button class="btn primary auth-submit" type="submit">Change password</button>
+        </form>
+      </div>
+      <div class="auth-foot">Session cookies are HttpOnly · SameSite=Strict · TLS is recommended for remote administration.</div>
+    </div>
+  </div>
+
+  <div class="app-shell hidden" id="appShell">
+    <aside class="sidebar" id="sidebar">
+      <button class="mobile-only sidebar-close" id="menuClose" aria-label="Close menu">×</button>
+      <div class="brand-block">
+        <div class="brand-mark">NP</div>
+        <div><div class="brand-name">NetProbe <span>IR</span></div><div class="brand-sub">Security · DPI · Forensics</div></div>
+      </div>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#/overview" data-route="overview" class="nav-item active"><span class="nav-icon">📊</span><span>Overview</span></a>
+        <a href="#/security" data-route="security" class="nav-item security-nav"><span class="nav-icon">🛡️</span><span>Security Findings</span><span class="nav-badge danger" id="navFindings">0</span></a>
+        <a href="#/traffic" data-route="traffic" class="nav-item"><span class="nav-icon">🌐</span><span>Live Traffic</span><span class="nav-badge" id="navFlows">0</span></a>
+        <a href="#/applications" data-route="applications" class="nav-item"><span class="nav-icon">🧩</span><span>Applications</span><span class="nav-badge" id="navApps">0</span></a>
+        <a href="#/interfaces" data-route="interfaces" class="nav-item"><span class="nav-icon">🖧</span><span>Interfaces</span></a>
+        <a href="#/hunt" data-route="hunt" class="nav-item"><span class="nav-icon">🔎</span><span>Hunt / Search</span></a>
+        <a href="#/investigation" data-route="investigation" class="nav-item"><span class="nav-icon">🕸️</span><span>Investigation Graph</span></a>
+        <a href="#/cases" data-route="cases" class="nav-item"><span class="nav-icon">📁</span><span>Incident Cases</span></a>
+        <a href="#/threat-intel" data-route="threat-intel" class="nav-item"><span class="nav-icon">🧠</span><span>Threat Intelligence</span></a>
+        <a href="#/lab" data-route="lab" class="nav-item"><span class="nav-icon">🧪</span><span>Detection Lab</span></a>
+        <a href="#/replay" data-route="replay" class="nav-item"><span class="nav-icon">♻️</span><span>PCAP Replay</span></a>
+        <a href="#/sensors" data-route="sensors" class="nav-item"><span class="nav-icon">🖧</span><span>Sensors</span></a>
+        <div class="nav-section">RUNTIME SECURITY</div>
+        <a href="#/files" data-route="files" class="nav-item"><span class="nav-icon">📦</span><span>Files &amp; Malware</span></a>
+        <a href="#/c2" data-route="c2" class="nav-item"><span class="nav-icon">🖧</span><span>C2 &amp; Encrypted DNS</span></a>
+        <a href="#/exposure" data-route="exposure" class="nav-item"><span class="nav-icon">👤</span><span>Exposure &amp; Identity</span></a>
+        <a href="#/fleet" data-route="fleet" class="nav-item"><span class="nav-icon">🧩</span><span>Fleet Management</span></a>
+        <a href="#/streaming" data-route="streaming" class="nav-item"><span class="nav-icon">📡</span><span>Data Streaming</span></a>
+        <a href="#/analyst" data-route="analyst" class="nav-item"><span class="nav-icon">🤖</span><span>Evidence Analyst</span></a>
+        <a href="#/alerts" data-route="alerts" class="nav-item"><span class="nav-icon">🚨</span><span>Behavioral Alerts</span><span class="nav-badge" id="navAlerts">0</span></a>
+        <div class="nav-section">SOC OPERATIONS</div>
+        <a href="#/stories" data-route="stories" class="nav-item"><span class="nav-icon">🧬</span><span>Attack Stories</span></a>
+        <a href="#/quality" data-route="quality" class="nav-item"><span class="nav-icon">📐</span><span>Detection Quality</span></a>
+        <a href="#/automation" data-route="automation" class="nav-item"><span class="nav-icon">🤖</span><span>Response Playbooks</span></a>
+        <a href="#/performance" data-route="performance" class="nav-item"><span class="nav-icon">📈</span><span>SOC Performance</span></a>
+        <a href="#/mitre" data-route="mitre" class="nav-item"><span class="nav-icon">🎯</span><span>MITRE ATT&amp;CK</span></a>
+        <a href="#/assets" data-route="assets" class="nav-item"><span class="nav-icon">🖥️</span><span>Assets</span></a>
+        <a href="#/time-machine" data-route="time-machine" class="nav-item"><span class="nav-icon">🕒</span><span>Time Machine</span></a>
+        <a href="#/tuning" data-route="tuning" class="nav-item"><span class="nav-icon">🎛️</span><span>Detection Tuning</span></a>
+        <a href="#/operations" data-route="operations" class="nav-item"><span class="nav-icon">🛠️</span><span>Operations</span></a>
+        <a href="#/account" data-route="account" class="nav-item"><span class="nav-icon">👤</span><span>My Account</span></a>
+        <a href="#/system" data-route="system" class="nav-item"><span class="nav-icon">⚙️</span><span>System Settings</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="mini-health"><span class="status-dot" id="sideDot"></span><div><strong id="sideState">Connecting</strong><small id="sideHealth">Waiting for telemetry</small></div></div>
+        <div class="version-line">NetProbe IR <span id="uiVersion">v1.0.0</span></div>
+      </div>
+    </aside>
+
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+    <main class="main-shell">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn mobile-only" id="menuToggle" aria-label="Toggle menu">☰</button>
+          <div class="breadcrumb" id="breadcrumb"></div>
+        </div>
+        <div class="topbar-right">
+          <div class="live-pill" id="livePill"><span class="pulse-dot"></span><span id="liveText">Connecting</span></div>
+          <button class="control-btn stop" id="captureStop" title="Stop capture on every interface while keeping the console online"><span>■</span><span>Stop all</span></button>
+          <button class="control-btn start hidden" id="captureStart" title="Start capture on every configured interface"><span>▶</span><span>Start all</span></button>
+          <button class="icon-btn" id="refreshBtn" title="Refresh now">↻</button>
+          <button class="account-pill" id="accountPill" title="Account and session settings"><span class="account-avatar" id="accountAvatar">A</span><span><strong id="accountName">admin</strong><small id="accountRole">admin</small></span></button>
+        </div>
+      </header>
+
+      <section class="focus-strip" id="focusStrip">
+        <div class="focus-search-wrap">
+          <span class="focus-icon">⌕</span>
+          <input id="focusQuery" class="focus-query" autocomplete="off" spellcheck="false" placeholder="Focus / hunt: src:10.0.0.5 dst:8.8.8.8 proto:dns app:tls process:curl iface:eth0 severity:critical …">
+          <kbd>/</kbd>
+        </div>
+        <button class="btn small" id="advancedFilters">Filters</button>
+        <button class="btn small hidden" id="clearFocus">Clear focus</button>
+        <button class="btn small primary" id="runHunt">Hunt</button>
+      </section>
+      <div class="focus-chips hidden" id="focusChips"></div>
+      <div class="filter-drawer hidden" id="filterDrawer">
+        <div class="filter-grid">
+          <label>Source IP<input id="filterSrc" placeholder="10.0.0.5 or text"></label>
+          <label>Destination IP<input id="filterDst" placeholder="1.1.1.1"></label>
+          <label>Protocol<input id="filterProto" placeholder="TCP, DNS, TLS"></label>
+          <label>Application<input id="filterApp" placeholder="HTTPS/TLS"></label>
+          <label>Process<input id="filterProcess" placeholder="curl / nginx / PID"></label>
+          <label>Interface<input id="filterIface" placeholder="eth0"></label>
+          <label>Direction<select id="filterDir"><option value="">Any</option><option>outbound</option><option>inbound</option><option>forwarded</option></select></label>
+          <label>Severity<select id="filterSeverity"><option value="">Any</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select></label>
+        </div>
+        <div class="filter-help"><strong>Query fields:</strong> <code>src:</code> <code>dst:</code> <code>ip:</code> <code>sport:</code> <code>dport:</code> <code>port:</code> <code>proto:</code> <code>app:</code> <code>process:</code> <code>pid:</code> <code>iface:</code> <code>dir:</code> <code>severity:</code> <code>verdict:</code> <code>rule:</code> <code>mitre:</code>. Free text searches all visible evidence.</div>
+      </div>
+
+      <div class="error-banner hidden" id="errorBanner"><strong>Capture notice</strong><span id="errorText"></span><button id="dismissError">×</button></div>
+      <div class="page" id="page"></div>
+
+      <footer>
+        <span>NetProbe IR</span><span>•</span><span>Developer <strong>Cuma KURT</strong></span><span>•</span><a href="mailto:cumakurt@gmail.com">cumakurt@gmail.com</a><span>•</span><a href="https://github.com/cumakurt/netprobe-ir" target="_blank" rel="noopener noreferrer">GitHub</a><span>•</span><a href="https://www.linkedin.com/in/cuma-kurt-34414917/" target="_blank" rel="noopener noreferrer">LinkedIn</a><span>•</span><span>GNU GPLv3</span>
+      </footer>
+    </main>
+  </div>
+  <div class="toast-stack" id="toasts" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+exec 2>&1
+exec /usr/local/sbin/netprobe-ir --config /etc/netprobe-ir/config.json

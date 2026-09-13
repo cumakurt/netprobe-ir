@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+# SPDX-License-Identifier: GPL-3.0-only
+name="NetProbe IR"
+description="Linux Network Forensics and Runtime Network Observability Sensor"
+command="/usr/local/sbin/netprobe-ir"
+command_args="--config /etc/netprobe-ir/config.json"
+command_background="yes"
+pidfile="/run/netprobe-ir.pid"
+output_log="/var/log/netprobe-ir.log"
+error_log="/var/log/netprobe-ir.log"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    checkpath -d -m 0750 /var/lib/netprobe-ir
+    checkpath -f -m 0640 "$output_log"
+}

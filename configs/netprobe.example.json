@@ -1,0 +1,250 @@
+{
+  "listen": "127.0.0.1:8443",
+  "interfaces": [],
+  "data_dir": "/var/lib/netprobe-ir",
+  "auth_token": "",
+  "allow_unauthenticated_remote": false,
+  "capture": {
+    "backend": "auto",
+    "snap_len": 65535,
+    "read_buffer": 8388608,
+    "flow_idle_seconds": 120
+  },
+  "recorder": {
+    "enabled": true,
+    "segment_mb": 64,
+    "max_disk_mb": 1024,
+    "incident_copies": true
+  },
+  "dpi": {
+    "max_stream_bytes": 131072
+  },
+  "anomaly": {
+    "enabled": true,
+    "exfiltration_mb": 100,
+    "fanout_destinations": 50,
+    "port_scan_ports": 30,
+    "burst_connections": 80,
+    "beacon_min_samples": 4,
+    "beacon_max_jitter": 0.15,
+    "dns_entropy_threshold": 4.2
+  },
+  "ids": {
+    "enabled": true,
+    "home_nets": [
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16"
+    ],
+    "port_scan_ports": 20,
+    "host_sweep_hosts": 20,
+    "window_seconds": 30,
+    "dns_high_entropy_queries": 12,
+    "nxdomain_threshold": 20,
+    "ioc_file": "",
+    "rules_file": "",
+    "rules_signature": "",
+    "rules_trusted_public_key": "",
+    "require_signed_rules": false,
+    "max_findings": 5000
+  },
+  "attribution": {
+    "backend": "auto",
+    "bpftrace_path": "",
+    "core_object": "/var/lib/netprobe-ir/bpf/netprobe_runtime.bpf.o"
+  },
+  "threat_intel": {
+    "enabled": true,
+    "stix_files": [],
+    "refresh_seconds": 900,
+    "taxii": [],
+    "enrichment_file": "/etc/netprobe-ir/enrichment.json"
+  },
+  "baseline": {
+    "enabled": true,
+    "min_observations": 20
+  },
+  "response": {
+    "enabled": false,
+    "dry_run": true,
+    "allowed_actions": [
+      "block_ip",
+      "unblock_ip",
+      "kill_process",
+      "disable_interface",
+      "enable_interface"
+    ],
+    "allowlist": [
+      "127.0.0.0/8"
+    ],
+    "max_ttl_seconds": 3600
+  },
+  "federation": {
+    "sensor_id": "",
+    "controller_url": "",
+    "sensor_token": "",
+    "ingest_enabled": false,
+    "ingest_token": "",
+    "interval_seconds": 10
+  },
+  "evidence": {
+    "signing_enabled": true
+  },
+  "lab": {
+    "allow_external_files": false
+  },
+  "auth": {
+    "enabled": true,
+    "default_username": "admin",
+    "session_idle_minutes": 30,
+    "session_absolute_hours": 12,
+    "max_failures": 5,
+    "lockout_seconds": 300,
+    "password_iterations": 600000,
+    "password_min_length": 12,
+    "require_password_change": true
+  },
+  "security": {
+    "console_allowed_cidrs": [
+      "127.0.0.0/8",
+      "::1/128"
+    ],
+    "require_signed_config": false,
+    "config_signature": "",
+    "config_trusted_public_key": "",
+    "forensic_immutable": false
+  },
+  "oidc": {
+    "enabled": false,
+    "issuer": "",
+    "client_id": "",
+    "client_secret": "",
+    "redirect_url": "",
+    "default_role": "viewer",
+    "username_claim": "preferred_username",
+    "scopes": [
+      "openid",
+      "profile",
+      "email"
+    ]
+  },
+  "integrations": {
+    "webhooks": [],
+    "syslog": {
+      "enabled": false,
+      "network": "udp",
+      "address": "127.0.0.1:514",
+      "format": "cef",
+      "min_severity": "high"
+    }
+  },
+  "timeline": {
+    "enabled": true,
+    "interval_seconds": 30,
+    "max_snapshots": 10000
+  },
+  "file_extraction": {
+    "enabled": true,
+    "store_payload": true,
+    "max_file_mb": 32,
+    "max_artifacts": 2000,
+    "yara_x_binary": "yr",
+    "yara_rules": "/etc/netprobe-ir/yara-rules.yar"
+  },
+  "scripting": {
+    "enabled": false,
+    "rules_file": "/etc/netprobe-ir/detections.npdl"
+  },
+  "smart_pcap": {
+    "mode": "full",
+    "default_action": "full",
+    "rules": [
+      {
+        "name": "privacy-metadata-only",
+        "action": "metadata",
+        "process": "password-manager"
+      },
+      {
+        "name": "retain-curl",
+        "action": "full",
+        "process": "curl"
+      }
+    ]
+  },
+  "streaming": {
+    "targets": []
+  },
+  "self_protection": {
+    "enabled": true,
+    "paths": [],
+    "min_free_mb": 256,
+    "clock_rollback_seconds": 5
+  },
+  "wasm": {
+    "enabled": false,
+    "runtime": "wasmtime",
+    "plugins": []
+  },
+  "analyst": {
+    "enabled": true,
+    "remote_enabled": false,
+    "endpoint": "",
+    "model": "",
+    "api_key_env": "NETPROBE_ANALYST_API_KEY",
+    "timeout_seconds": 20
+  },
+  "vulnerability": {
+    "enabled": true,
+    "kev_file": "",
+    "kev_url": "",
+    "refresh_seconds": 86400,
+    "discover_packages": true
+  },
+  "encrypted_dns": {
+    "enabled": true,
+    "known_resolvers": [
+      "cloudflare-dns.com",
+      "dns.google",
+      "dns.quad9.net",
+      "dns.nextdns.io"
+    ],
+    "allowed_processes": [
+      "firefox",
+      "chrome",
+      "chromium",
+      "systemd-resolved"
+    ]
+  },
+  "identity_baseline": {
+    "enabled": true,
+    "min_observations": 20
+  },
+  "lateral": {
+    "enabled": true,
+    "window_seconds": 120,
+    "host_threshold": 5
+  },
+  "beacon": {
+    "advanced_enabled": true,
+    "min_samples": 5,
+    "max_jitter": 0.15,
+    "min_size_similarity": 0.8
+  },
+  "protocol_packs": {
+    "enabled": [
+      "core",
+      "enterprise",
+      "database",
+      "devops",
+      "ics"
+    ]
+  },
+  "analytics": {
+    "max_events": 200000
+  },
+  "profiles": {
+    "enabled": false,
+    "endpoint": "",
+    "token_env": "NETPROBE_OTEL_PROFILES_TOKEN"
+  }
+}

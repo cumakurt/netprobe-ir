@@ -1,0 +1,7 @@
+{
+  "ips": ["203.0.113.66"],
+  "domains": ["malware.example"],
+  "sni": ["c2.example"],
+  "ja3": ["0123456789abcdef0123456789abcdef"],
+  "ja4": ["t13d1516h2_8daaf6152771_e5627efa2ab1"]
+}
