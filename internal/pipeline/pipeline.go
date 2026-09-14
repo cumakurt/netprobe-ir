@@ -58,6 +58,7 @@ import (
 	"netprobe-ir/internal/stories"
 	"netprobe-ir/internal/streaming"
 	"netprobe-ir/internal/syslogexport"
+	"netprobe-ir/internal/telemetry"
 	"netprobe-ir/internal/threatintel"
 	"netprobe-ir/internal/timeline"
 	"netprobe-ir/internal/tlsintel"
@@ -125,6 +126,7 @@ type Engine struct {
 	NetworkBaseline  *netbaseline.Store
 	Notifications    *notifications.Manager
 	TrafficSeries    *trafficseries.Store
+	Telemetry        *telemetry.Store
 	EBPF             *ebpfattr.Runner
 	Recorder         *pcapng.Recorder
 	frames           chan capture.Frame
@@ -175,6 +177,7 @@ func New(c config.Config) *Engine {
 	e.DPI.SetProtocolPacks(c.ProtocolPacks.Enabled)
 	e.EventBus = eventbus.New()
 	e.TrafficSeries = trafficseries.New(e.EventBus, 90000)
+	e.Telemetry = telemetry.New(e.Started, time.Duration(c.Capture.FlowIdleSeconds)*time.Second)
 	if nm, err := notifications.Open(c.DataDir); err == nil {
 		e.Notifications = nm
 	} else {
@@ -318,6 +321,7 @@ func (e *Engine) Start(ctx context.Context) error {
 				}
 			}()
 		}
+		go e.Telemetry.Run(ctx)
 		go e.processor(ctx)
 		go e.maintenance(ctx)
 		go func() {
@@ -757,6 +761,9 @@ func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 		f = latest
 	}
 	e.publishTelemetry(p, f, proc, di, packetID)
+	if attributeProcess && e.Telemetry != nil {
+		e.Telemetry.Observe(model.PacketSummary{Time: p.Time, Interface: p.Interface, Direction: dir, NetworkProtocol: p.Protocol, IPVersion: p.IPVersion, Source: model.Endpoint{IP: p.SrcIP, Port: p.SrcPort}, Destination: model.Endpoint{IP: p.DstIP, Port: p.DstPort}, Length: len(p.Raw), TCPFlags: decode.TCPFlagsString(p.TCPFlags), FlowID: f.ID, DPI: di})
+	}
 }
 
 func (e *Engine) PublishSystemEvent(kind string, payload any) {

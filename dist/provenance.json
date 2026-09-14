@@ -1,13 +1,13 @@
 {
   "project": "NetProbe IR",
   "version": "1.0.0",
-  "commit": "9453d85",
-  "build_date": "2026-09-13T19:40:56Z",
+  "commit": "7839ad6",
+  "build_date": "2026-09-14T11:24:08Z",
   "go_version": "go1.26.7",
   "reproducible_controls": ["CGO_ENABLED=0", "-trimpath", "-buildvcs=false", "-buildid=", "SOURCE_DATE_EPOCH supported"],
   "artifacts": {
-    "linux_amd64": {"path":"dist/netprobe-linux-amd64","sha256":"1e560eb9da98e6d24b4d7ae26b5c0ae987b2f5124d5f274a4f16928891fac511"},
-    "linux_arm64": {"path":"dist/netprobe-linux-arm64","sha256":"0abc791d7a4bbe40d1aa58433d09aff6fcacec8158b807755be5f60994d660e5"}
+    "linux_amd64": {"path":"dist/netprobe-linux-amd64","sha256":"63dd34b04e9e65d7b58d518065708eeb8a3a15d39b286604c3c4baea6a01cfd1"},
+    "linux_arm64": {"path":"dist/netprobe-linux-arm64","sha256":"b4bcb0be8e7d116b6d60a82f242bd18ab9de762ae0ea3f3470a82d897193b360"}
   },
   "source_repository": "https://github.com/cumakurt/netprobe-ir",
   "license": "GPL-3.0-only"

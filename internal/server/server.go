@@ -105,6 +105,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/report.json", s.guard("read:reports", s.reportJSON))
 	mux.HandleFunc("/api/v1/report.html", s.guard("read:reports", s.reportHTML))
 	mux.HandleFunc("/api/v1/graph", s.guard("read:graph", s.graph))
+	mux.HandleFunc("/api/v1/telemetry", s.guard("read:telemetry", s.telemetryAPI))
+	mux.HandleFunc("/api/v1/telemetry/stream", s.guard("read:telemetry", s.telemetryAPI))
 	mux.HandleFunc("/api/v1/traffic/live", s.guard("read:status", s.trafficLive))
 	mux.HandleFunc("/api/v1/traffic/history", s.guard("read:status", s.trafficHistory))
 	mux.HandleFunc("/api/v1/notifications", s.guard("admin:settings", s.notificationsAPI))

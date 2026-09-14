@@ -123,7 +123,8 @@ func appendExt(ex []byte, t uint16, d []byte) []byte {
 
 func TestQUICLongHeaderMetadata(t *testing.T) {
 	// v1 Initial-like long header with 4-byte DCID and 4-byte SCID.
-	b := []byte{0xc0, 0, 0, 0, 1, 4, 0xde, 0xad, 0xbe, 0xef, 4, 1, 2, 3, 4, 0}
+	b := []byte{0xc0, 0, 0, 0, 1, 4, 0xde, 0xad, 0xbe, 0xef, 4, 1, 2, 3, 4, 0, 17}
+	b = append(b, make([]byte, 17)...)
 	x := New(4096).Inspect("q", model.DirectionOutbound, pkt(b, 55000, 443, "UDP"))
 	if x.QUIC == nil || x.QUIC.VersionHex != "0x00000001" || x.QUIC.DCID != "deadbeef" || x.QUIC.Fingerprint == "" {
 		t.Fatalf("bad quic: %+v", x)

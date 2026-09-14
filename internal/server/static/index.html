@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>NetProbe IR — Security & Network Forensics Console</title>
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/analytics.css">
 </head>
 <body>
   <div class="auth-gate" id="authGate">
@@ -46,6 +47,7 @@
       </div>
       <nav class="nav" aria-label="Primary navigation">
         <a href="#/overview" data-route="overview" class="nav-item active"><span class="nav-icon">📊</span><span>Overview</span></a>
+        <a href="#/top-analytics" data-route="top-analytics" class="nav-item"><span class="nav-icon">⇅</span><span>Top Analytics</span></a>
         <a href="#/security" data-route="security" class="nav-item security-nav"><span class="nav-icon">🛡️</span><span>Security Findings</span><span class="nav-badge danger" id="navFindings">0</span></a>
         <a href="#/traffic" data-route="traffic" class="nav-item"><span class="nav-icon">🌐</span><span>Live Traffic</span><span class="nav-badge" id="navFlows">0</span></a>
         <a href="#/dns" data-route="dns" class="nav-item"><span class="nav-icon">⌕</span><span>DNS Queries</span></a>
@@ -136,6 +138,7 @@
     </main>
   </div>
   <div class="toast-stack" id="toasts" aria-live="polite"></div>
+  <script src="/analytics.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

@@ -1138,3 +1138,10 @@ Read `LICENSE` before redistribution or creation of derivative works, and see `d
 ### DNS and web access analysis
 
 Dedicated **DNS Queries** and **Web Access** menus refresh captured observations every second, with search, pause/resume and cursor pagination. See [capture coverage, retention limits and API](docs/DNS_WEB_ANALYSIS.md).
+
+### Live Traffic Analytics
+
+The **Top Analytics** menu and **Interfaces → interface name** provide live
+SSE telemetry, observed Top rankings, application visibility and real Linux
+RX/TX charts. See [measurement semantics, API and validation](docs/TRAFFIC_ANALYTICS.md)
+for capture coverage, retention, Unknown classifications and resource bounds.

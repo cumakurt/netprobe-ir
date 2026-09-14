@@ -31,10 +31,13 @@ echo '==> source/embedded web assets are synchronized'
 cmp -s web/static/index.html internal/server/static/index.html
 cmp -s web/static/app.css internal/server/static/app.css
 cmp -s web/static/app.js internal/server/static/app.js
+cmp -s web/static/analytics.js internal/server/static/analytics.js
+cmp -s web/static/analytics.css internal/server/static/analytics.css
 
 if command -v node >/dev/null 2>&1; then
   echo '==> embedded web JavaScript syntax'
   node --check internal/server/static/app.js
+  node --check internal/server/static/analytics.js
   node --check scripts/ui-e2e.js
 else
   echo '==> embedded web JavaScript syntax: SKIP (node not installed; not a runtime dependency)'

@@ -110,22 +110,18 @@ func (e *Engine) InspectObserved(flowID string, dir model.Direction, p *decode.P
 			st.info.Application = "DNS"
 			st.info.Confidence = 100
 			st.info.DNS = &d
+			st.info.Evidence = "payload"
 		}
 	}
-	if p.Protocol == "UDP" && (p.SrcPort == 443 || p.DstPort == 443) && st.info.Protocol == "" {
-		st.info.Protocol = "QUIC"
-		st.info.Application = "QUIC/HTTP3"
-		st.info.Confidence = 55
-		st.info.Encrypted = true
+	if p.Protocol == "UDP" && st.info.Protocol == "" {
 		if q, ok := parseQUICHeader(p.Payload); ok {
-			st.info.QUIC = &q
-			st.info.Confidence = 90
+			st.info = model.DPIInfo{Protocol: "QUIC", Application: "QUIC", Confidence: 90, Encrypted: true, QUIC: &q, Evidence: "payload"}
+		}
+		if app := detectAdditional(p, p.Payload); app != "" {
+			st.info = model.DPIInfo{Protocol: app, Application: app, Confidence: 95, Evidence: "payload", Encrypted: app == "WireGuard"}
 		}
 	}
 	if p.Protocol != "TCP" || len(p.Payload) == 0 {
-		if st.info.Protocol == "" {
-			applyPortHint(&st.info, p)
-		}
 		e.filterPack(&st.info)
 		return clone(st.info), observations
 	}
@@ -152,8 +148,9 @@ func (e *Engine) InspectObserved(flowID string, dir model.Direction, p *decode.P
 			st.info.Application = "DNS over TCP"
 			st.info.Confidence = 100
 			st.info.DNS = &d
+			st.info.Evidence = "payload"
 		}
-		if h, ok := parseHTTP(b); ok && !h2Found {
+		if h, ok := parseHTTP(b); ok && !h2Found && st.info.HTTP == nil {
 			st.info.Protocol = "HTTP"
 			st.info.Application = "HTTP"
 			st.info.Confidence = 100
@@ -212,9 +209,28 @@ func (e *Engine) InspectObserved(flowID string, dir model.Direction, p *decode.P
 			st.info.SSHBanner = strings.TrimSpace(line)
 		}
 	}
-	if st.info.Protocol == "" {
-		applyPortHint(&st.info, p)
+	if st.info.Confidence < 100 {
+		if app := detectAdditional(p, b); app != "" {
+			st.info.Protocol = app
+			st.info.Application = app
+			st.info.Confidence = 95
+			st.info.Evidence = "payload"
+		}
 	}
+	if st.info.Protocol != "" {
+		st.info.Evidence = "payload"
+	}
+	// Complete per-message observations supersede the first request retained in
+	// the stream prefix, including a Host change on an HTTP keep-alive connection.
+	for _, observation := range observations {
+		if observation.HTTP != nil {
+			st.info.Protocol = "HTTP"
+			st.info.Application = "HTTP"
+			st.info.Confidence = 100
+			mergeHTTP(&st.info, *observation.HTTP)
+		}
+	}
+	identifyHost(&st.info)
 	e.filterPack(&st.info)
 	return clone(st.info), observations
 }
@@ -279,66 +295,6 @@ func appendSegment(s *stream, seq uint32, data []byte, max int) {
 	}
 }
 
-func applyPortHint(i *model.DPIInfo, p *decode.Packet) {
-	port := p.DstPort
-	if port == 0 {
-		port = p.SrcPort
-	}
-	set := func(proto, app, pack string, conf int, enc bool) {
-		i.Protocol = proto
-		i.Application = app
-		i.ProtocolPack = pack
-		i.Confidence = conf
-		i.Encrypted = enc
-	}
-	switch {
-	case p.SrcPort == 53 || p.DstPort == 53:
-		set("DNS", "DNS", "core", 45, false)
-	case p.SrcPort == 443 || p.DstPort == 443:
-		set("TLS/QUIC", "HTTPS", "core", 35, true)
-	case p.SrcPort == 22 || p.DstPort == 22:
-		set("SSH", "SSH", "core", 40, true)
-	case p.SrcPort == 80 || p.DstPort == 80:
-		set("HTTP", "HTTP", "core", 40, false)
-	case port == 25 || p.SrcPort == 25 || port == 587 || p.SrcPort == 587:
-		set("SMTP", "SMTP", "core", 35, false)
-	case port == 21 || p.SrcPort == 21:
-		set("FTP", "FTP", "core", 35, false)
-	case port == 445 || p.SrcPort == 445:
-		set("SMB", "SMB", "enterprise", 45, false)
-	case port == 88 || p.SrcPort == 88:
-		set("Kerberos", "Kerberos", "enterprise", 45, false)
-	case port == 389 || p.SrcPort == 389 || port == 636 || p.SrcPort == 636:
-		set("LDAP", "LDAP", "enterprise", 40, port == 636 || p.SrcPort == 636)
-	case port == 3389 || p.SrcPort == 3389:
-		set("RDP", "RDP", "enterprise", 35, true)
-	case port == 5985 || p.SrcPort == 5985 || port == 5986 || p.SrcPort == 5986:
-		set("HTTP", "WinRM", "enterprise", 40, port == 5986 || p.SrcPort == 5986)
-	case port == 3306 || p.SrcPort == 3306:
-		set("MySQL", "MySQL", "database", 35, false)
-	case port == 5432 || p.SrcPort == 5432:
-		set("PostgreSQL", "PostgreSQL", "database", 35, false)
-	case port == 1433 || p.SrcPort == 1433:
-		set("TDS", "Microsoft SQL Server", "database", 35, false)
-	case port == 6379 || p.SrcPort == 6379:
-		set("RESP", "Redis", "database", 35, false)
-	case port == 2375 || p.SrcPort == 2375 || port == 2376 || p.SrcPort == 2376:
-		set("HTTP", "Docker API", "devops", 40, port == 2376 || p.SrcPort == 2376)
-	case port == 6443 || p.SrcPort == 6443:
-		set("TLS", "Kubernetes API", "devops", 40, true)
-	case port == 2379 || p.SrcPort == 2379 || port == 2380 || p.SrcPort == 2380:
-		set("HTTP/2", "etcd", "devops", 35, true)
-	case port == 502 || p.SrcPort == 502:
-		set("Modbus/TCP", "Modbus", "ics", 40, false)
-	case port == 20000 || p.SrcPort == 20000:
-		set("DNP3", "DNP3", "ics", 40, false)
-	case port == 102 || p.SrcPort == 102:
-		set("ISO-on-TCP", "Siemens S7", "ics", 40, false)
-	case port == 47808 || p.SrcPort == 47808:
-		set("BACnet/IP", "BACnet", "ics", 40, false)
-	}
-}
-
 func detectProtocolPack(p *decode.Packet, b []byte) (proto, app, pack string, confidence int) {
 	if len(b) >= 4 && (bytes.Equal(b[:4], []byte{0xff, 'S', 'M', 'B'}) || bytes.Equal(b[:4], []byte{0xfe, 'S', 'M', 'B'})) {
 		return "SMB", "SMB", "enterprise", 100
@@ -356,7 +312,7 @@ func detectProtocolPack(p *decode.Packet, b []byte) (proto, app, pack string, co
 		return "Kerberos", "Kerberos", "enterprise", 85
 	}
 	up := bytes.ToUpper(bytes.TrimSpace(b))
-	if bytes.HasPrefix(up, []byte("PING")) || bytes.HasPrefix(up, []byte("GET ")) || bytes.HasPrefix(up, []byte("SET ")) || bytes.HasPrefix(up, []byte("*")) && (p.SrcPort == 6379 || p.DstPort == 6379) {
+	if (p.SrcPort == 6379 || p.DstPort == 6379) && (bytes.Equal(up, []byte("PING")) || bytes.HasPrefix(up, []byte("*")) && bytes.Contains(up, []byte("\r\n$"))) {
 		return "RESP", "Redis", "database", 90
 	}
 	if (p.SrcPort == 5432 || p.DstPort == 5432) && len(b) >= 8 && binary.BigEndian.Uint32(b[4:8]) == 196608 {
@@ -391,7 +347,7 @@ func parseHTTP2(b []byte) (model.HTTP2Info, bool) {
 		h.PrefaceSeen = true
 		pos = len(preface)
 	}
-	if !h.PrefaceSeen && len(b) < 9 {
+	if !h.PrefaceSeen {
 		return model.HTTP2Info{}, false
 	}
 	seen := map[uint32]bool{}
@@ -946,6 +902,9 @@ func parseQUICHeader(b []byte) (model.QUICInfo, bool) {
 		return model.QUICInfo{}, false
 	}
 	v := binary.BigEndian.Uint32(b[1:5])
+	if v != 1 {
+		return model.QUICInfo{}, false
+	}
 	pos := 5
 	dl := int(b[pos])
 	pos++
@@ -977,12 +936,27 @@ func parseQUICHeader(b []byte) (model.QUICInfo, bool) {
 				if tokenLen > uint64(len(b)-pos) {
 					return model.QUICInfo{}, false
 				}
+				pos += int(tokenLen)
+				length, n, valid := quicVarint(b[pos:])
+				if !valid || length < 17 || length > uint64(len(b)-pos-n) {
+					return model.QUICInfo{}, false
+				}
+			} else {
+				return model.QUICInfo{}, false
 			}
-		case 1:
+		case 1, 2:
 			ptype = "0-rtt"
-		case 2:
-			ptype = "handshake"
+			if (b[0]>>4)&0x03 == 2 {
+				ptype = "handshake"
+			}
+			length, n, valid := quicVarint(b[pos:])
+			if !valid || length < 17 || length > uint64(len(b)-pos-n) {
+				return model.QUICInfo{}, false
+			}
 		case 3:
+			if len(b)-pos < 16 {
+				return model.QUICInfo{}, false
+			}
 			ptype = "retry"
 			retry = true
 		}

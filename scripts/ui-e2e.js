@@ -17,13 +17,14 @@ async function retry(fn, timeout=15000, step=100) {
 }
 
 class CDP {
-  constructor(ws) { this.ws=ws; this.id=0; this.pending=new Map(); }
+  constructor(ws) { this.ws=ws; this.id=0; this.pending=new Map(); this.exceptions=[]; }
   static async connect(url) {
     const ws = new WebSocket(url);
     await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject});
     const c = new CDP(ws);
     ws.onmessage = e => {
       const m=JSON.parse(e.data);
+      if(m.method==='Runtime.exceptionThrown')c.exceptions.push(m.params.exceptionDetails);
       if(m.id && c.pending.has(m.id)){
         const {resolve,reject}=c.pending.get(m.id); c.pending.delete(m.id);
         if(m.error) reject(new Error(m.error.message)); else resolve(m.result||{});
@@ -99,6 +100,48 @@ async function main(){
   assert(captureAfterPause.status?.capture_running===captureBeforePause.status?.capture_running,'Pause Live changed backend capture state');
   await cdp.eval(`document.querySelector('[data-action="traffic-pause"]').click()`);
   console.log('PASS: Live traffic range and UI-only Pause/Resume');
+
+  // Analytics uses captured packets and kernel counters from the real loopback device.
+  await cdp.eval(`document.querySelector('[data-route="top-analytics"]').click()`);
+  await retry(()=>cdp.eval(`document.querySelector('.analytics-status')?.textContent.startsWith('Live') && Number(document.querySelector('.analytics-chart canvas')?.dataset.points)>0`));
+  await cdp.eval(`window.__analyticsCanvas=document.querySelector('.analytics-chart canvas');document.getElementById('analyticsFilter').focus();document.getElementById('analyticsFilter').value='loopback draft'`);
+  await sleep(2200);
+  assert(await cdp.eval(`document.activeElement.id==='analyticsFilter' && document.getElementById('analyticsFilter').value==='loopback draft' && window.__analyticsCanvas===document.querySelector('.analytics-chart canvas')`),'live analytics replaced DOM or input focus');
+  await cdp.eval(`document.getElementById('analyticsFilter').value='';document.getElementById('analyticsPause').click()`);
+  const frozen=await cdp.eval(`document.querySelector('#analyticsMetrics').textContent`);
+  await sleep(1600);
+  assert(await cdp.eval(`document.querySelector('#analyticsMetrics').textContent`)===frozen,'paused analytics counters changed');
+  await cdp.eval(`document.getElementById('analyticsPause').click()`);
+  for(const range of ['1m','5m','15m','1h','6h','24h','live']){
+    await cdp.eval(`(()=>{const s=document.getElementById('analyticsRange');s.value='${range}';s.dispatchEvent(new Event('change'))})()`);
+    await retry(()=>cdp.eval(`document.querySelector('.analytics-status')?.textContent.startsWith('Live')`));
+    assert((await fetch(base+'/api/v1/telemetry?range='+range)).ok,'analytics range API failed: '+range);
+  }
+  await cdp.eval(`document.querySelector('.analytics-chart-legend button').click()`);
+  assert(await cdp.eval(`document.querySelector('.analytics-chart-legend button').getAttribute('aria-pressed')==='false'`),'chart legend did not hide series');
+  await cdp.eval(`location.hash='#/interfaces'`);
+  await retry(()=>cdp.eval(`!!document.querySelector('[data-nav="#/interface/lo"]')`));
+  await cdp.eval(`document.querySelector('[data-nav="#/interface/lo"]').click()`);
+  await retry(()=>cdp.eval(`!!document.getElementById('kernelMetrics') && document.querySelector('.analytics-status')?.textContent.startsWith('Live')`));
+  const ifaceTelemetry=await (await fetch(base+'/api/v1/telemetry?interface=lo')).json();
+  assert(ifaceTelemetry.snapshot.kernel.rx.bytes>0 && ifaceTelemetry.snapshot.kernel.tx.bytes>0,'real interface RX/TX counters missing');
+  assert(await cdp.eval(`document.querySelectorAll('#kernelMetrics .analytics-metric').length===10`),'interface statistics incomplete');
+  await cdp.eval(`document.querySelector('.analytics-chart canvas').scrollIntoView({block:'center'})`);
+  const point=await cdp.eval(`(()=>{const r=document.querySelector('.analytics-chart canvas').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`);
+  await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
+  await retry(()=>cdp.eval(`!document.querySelector('.analytics-tooltip').classList.contains('hidden')`));
+  for(const width of [1440,768,390]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});await sleep(150);
+    assert(await cdp.eval(`document.querySelector('.analytics-root').getBoundingClientRect().right<=innerWidth+2`),'analytics overflow at width '+width);
+    if(process.env.NETPROBE_UI_SCREENSHOTS){await cdp.eval(`scrollTo(0,0)`);const shot=await cdp.send('Page.captureScreenshot',{format:'png'});const fs=require('fs');fs.mkdirSync(process.env.NETPROBE_UI_SCREENSHOTS,{recursive:true});fs.writeFileSync(process.env.NETPROBE_UI_SCREENSHOTS+'/analytics-'+width+'.png',Buffer.from(shot.data,'base64'))}
+  }
+  await cdp.send('Emulation.clearDeviceMetricsOverride');
+  await cdp.send('HeapProfiler.collectGarbage');const analyticsHeap0=await cdp.send('Runtime.getHeapUsage');
+  for(let i=0;i<6;i++){await cdp.eval(`location.hash='#/top-analytics'`);await sleep(180);await cdp.eval(`location.hash='#/interface/lo'`);await sleep(180)}
+  await sleep(1800);await cdp.send('HeapProfiler.collectGarbage');const analyticsHeap1=await cdp.send('Runtime.getHeapUsage');
+  assert(analyticsHeap1.usedSize-analyticsHeap0.usedSize<12*1024*1024,'analytics navigation leaked browser heap');
+  assert(cdp.exceptions.length===0,'browser exceptions: '+JSON.stringify(cdp.exceptions));
+  console.log('PASS: Analytics SSE, persistent DOM, pause/resume, all ranges, interface RX/TX, chart hover/legend, responsive layout and navigation heap');
 
   // Investigation graph real browser interactions.
   await cdp.eval(`location.hash='#/investigation'`);
@@ -191,7 +234,8 @@ async function main(){
   await retry(()=>cdp.eval(`!!document.getElementById('syslogName') && !!document.getElementById('flowName')`));
   await cdp.send('Network.enable');
   let telemetryFrames=0;
-  cdp.ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.method==='Network.webSocketFrameReceived')telemetryFrames++});
+  cdp.ws.addEventListener('message',e=>{const m=JSON.parse(e.data);
+      if(m.method==='Runtime.exceptionThrown')c.exceptions.push(m.params.exceptionDetails);if(m.method==='Network.webSocketFrameReceived')telemetryFrames++});
   for(const kind of ['syslog','flow']){
     const protocolID=kind==='syslog'?'syslogTransport':'flowProtocol';
     const protocol=kind==='syslog'?'tcp':'netflow9';

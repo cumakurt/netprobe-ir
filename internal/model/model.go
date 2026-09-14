@@ -105,6 +105,8 @@ type QUICInfo struct {
 }
 
 type DPIInfo struct {
+	Evidence     string     `json:"evidence,omitempty"`
+	MatchedHost  string     `json:"matched_host,omitempty"`
 	Protocol     string     `json:"protocol,omitempty"`
 	Application  string     `json:"application,omitempty"`
 	Confidence   int        `json:"confidence,omitempty"`
