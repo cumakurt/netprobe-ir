@@ -37,39 +37,48 @@ Tam GPLv3 metni `LICENSE`, telif/lisans özeti `COPYRIGHT`, geliştirici bilgile
 
 ## Ürün turu
 
-Aşağıdaki ekran görüntüleri temsili tasarımlar değil, v1.0.0 web konsolunun gerçek ürün görünümleridir.
+Aşağıdaki görüntüler, yalıtılmış bir ağ ortamında **sentetik örnek verilerle** açılan güncel v1.0.0 web konsolundan alınmıştır. Adresler ve alan adları dokümantasyon örnekleridir; bulgular gerçek bir olaya ait değildir. Her görüntü **SYNTHETIC DEMO DATA** etiketi taşır.
 
 ### Yönetici genel görünümü
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-35-35%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR yönetici genel görünümü" width="900">
+  <img src="img/overview.png" alt="Sentetik bulgu ve trafik içeren NetProbe IR yönetici genel görünümü" width="900">
 </p>
 
-### İnteraktif inceleme grafiği
+### Top Analytics / Traffic Summary
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-37-31%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="İnteraktif NetProbe IR inceleme grafiği" width="900">
+  <img src="img/top-analytics.png" alt="Sentetik verilerle NetProbe IR canlı trafik ölçümleri ve yön grafiği" width="900">
 </p>
 
-### Saldırı hikâyeleri ve tespit kalitesi
+### Güvenlik bulguları ve inceleme grafiği
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-37-59%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR saldırı hikâyeleri" width="900">
+  <img src="img/security-findings.png" alt="Sentetik IOC ve davranış örnekleriyle NetProbe IR güvenlik bulguları" width="900">
 </p>
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-38-08%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR tespit kalitesi merkezi" width="900">
+  <img src="img/investigation-graph.png" alt="Sentetik akış, süreç ve bulguları bağlayan NetProbe IR inceleme grafiği" width="900">
 </p>
 
-### SOC performansı ve telemetri sağlığı
+### Olay dosyası ve host triage
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-38-25%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR SOC performansı ve telemetri sağlığı" width="900">
+  <img src="img/host-triage.png" alt="Sentetik host triage anlık görüntüsünü gösteren NetProbe IR olay dosyası" width="900">
 </p>
 
-Diğer ürün görünümleri [`img/`](img/) klasöründedir.
+<details>
+<summary>Diğer konsol görüntüleri</summary>
 
+- [Trafik inceleme sıralamaları](img/traffic-rankings.png)
+- [Canlı akış tablosu](img/live-traffic.png)
+- [Saldırı hikâyeleri](img/attack-stories.png)
+- [Tespit kalitesi](img/detection-quality.png)
+- [Olay dosyası genel görünümü](img/incident-case.png)
 
+</details>
+
+Tüm görüntüler, `scripts/capture-readme-screenshots.sh` çalıştırılarak yalıtılmış sentetik veri kümesinden yeniden üretilebilir. Betik, bütün görüntüler başarıyla oluşturulup doğrulandıktan sonra `img/` içeriğini değiştirir.
 
 
 ## v1.0.0 Production Investigation, Notifications ve Live Traffic

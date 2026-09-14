@@ -41,7 +41,7 @@ func (e *Engine) Hunt(query string, limit int) HuntResult {
 	tokens := parseHunt(query)
 	out := HuntResult{Query: strings.TrimSpace(query), Counts: map[string]int{}}
 
-	for _, f := range e.Flows(0) {
+	for _, f := range e.VisibleFlows(0) {
 		if huntMatch(flowContext(f), tokens) {
 			out.Counts["flows"]++
 			if len(out.Flows) < limit {
@@ -49,7 +49,7 @@ func (e *Engine) Hunt(query string, limit int) HuntResult {
 			}
 		}
 	}
-	for _, p := range e.Packets(0) {
+	for _, p := range e.VisiblePackets(0) {
 		if huntMatch(packetContext(p), tokens) {
 			out.Counts["packets"]++
 			if len(out.Packets) < limit {

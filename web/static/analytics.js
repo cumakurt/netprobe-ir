@@ -60,25 +60,37 @@
       text(this.el.children[1], value);
     }
   }
-  class TrafficDirection {
-    constructor(root, index) {
-      this.index = index;
-      this.el = document.createElement('div');
-      this.el.className = 'traffic-direction';
-      this.el.style.setProperty('--direction-color', colors[index]);
-      this.el.innerHTML = `<div class="direction-lane"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="${index === 0 ? 'M24 7v32 M10 25l14 14 14-14' : index === 1 ? 'M24 41V9 M10 23L24 9l14 14' : 'M7 24h32 M25 10l14 14-14 14'}"/></svg></div><div><span>${directions[index]}</span><strong>Not available</strong><small></small></div>`;
+  class DirectionMix {
+    constructor(root) {
+      this.el = document.createElement('section');
+      this.el.className = 'panel analytics-direction-mix';
+      this.el.innerHTML = '<div class="panel-head"><div><strong>Traffic by direction</strong><div class="panel-sub">Current measured interval · host relative</div></div></div><div class="analytics-direction-body"><div class="analytics-direction-stack" role="img" aria-label="Traffic direction share"></div><div class="analytics-direction-list"></div></div>';
       root.append(this.el);
+      this.stack = this.el.querySelector('.analytics-direction-stack');
+      this.list = this.el.querySelector('.analytics-direction-list');
+      directions.forEach((name, i) => {
+        const segment = document.createElement('span');
+        segment.style.background = colors[i];
+        this.stack.append(segment);
+        const row = document.createElement('div');
+        row.innerHTML = '<i></i><span></span><strong></strong><small></small>';
+        row.children[0].style.background = colors[i];
+        text(row.children[1], name);
+        this.list.append(row);
+      });
     }
-    update(point, total) {
-      const i = this.index,
-        seconds = point.seconds,
-        bps = seconds > 0 ? point.bytes[i] * 8 / seconds : null,
-        pps = seconds > 0 ? point.packets[i] / seconds : 0;
-      this.el.classList.toggle('moving', pps > 0);
-      this.el.style.setProperty('--arrow-duration', `${Math.max(.35, 2.5 / (1 + Math.log10(1 + pps)))}s`);
-      this.el.style.setProperty('--arrow-width', String(Math.min(8, 4 + Math.log10(1 + (bps || 0)) / 3)));
-      text(this.el.querySelector('strong'), format(bps, 'bit/s'));
-      text(this.el.querySelector('small'), `${format(pps, 'packet/s')} · ${format(total.bytes)} · ${format(total.packets, '')} packets`);
+    update(point) {
+      const measured = point.seconds > 0;
+      const total = measured ? (point.bytes || []).reduce((sum, value) => sum + num(value), 0) : 0;
+      const shares = directions.map((_, i) => total ? num(point.bytes?.[i]) / total * 100 : 0);
+      directions.forEach((name, i) => {
+        this.stack.children[i].style.width = `${shares[i]}%`;
+        this.stack.children[i].title = `${name}: ${shares[i].toFixed(1)}%`;
+        const row = this.list.children[i];
+        text(row.children[2], measured ? `${shares[i].toFixed(1)}%` : '—');
+        text(row.children[3], format(measured ? num(point.bytes?.[i]) * 8 / point.seconds : null, 'bit/s'));
+      });
+      this.stack.setAttribute('aria-label', measured ? `Current traffic: ${directions.map((name, i) => `${name} ${shares[i].toFixed(1)}%`).join(', ')}` : 'No measured traffic interval');
     }
   }
   class TopTable {
@@ -90,9 +102,10 @@
       this.filter = '';
       this.el = document.createElement('section');
       this.el.className = 'panel analytics-top';
+      this.el.classList.toggle('analytics-top-count-only', metric === 'flows');
       this.el.innerHTML = '<div class="panel-head"><strong></strong><span class="td-sub"></span></div><div class="table-shell"><table class="data-table"><thead><tr><th>Observed entity</th><th>Volume</th><th>Packets</th></tr></thead><tbody></tbody></table></div><div class="analytics-pagination"><button class="btn small" type="button" aria-label="Previous page">←</button><span></span><button class="btn small" type="button" aria-label="Next page">→</button></div>';
       text(this.el.querySelector('strong'), title);
-      text(this.el.querySelector('thead th:nth-child(2)'), metric === 'flows' ? 'Flows / SYNs' : metric === 'duration' ? 'Duration' : metric === 'packets' ? 'Packets' : 'Bytes');
+      text(this.el.querySelector('thead th:nth-child(2)'), metric === 'flows' ? 'TCP SYNs' : metric === 'duration' ? 'Duration' : metric === 'packets' ? 'Packets' : 'Bytes');
       text(this.el.querySelector('thead th:nth-child(3)'), metric === 'packets' ? 'Bytes' : metric === 'flows' ? '' : 'Packets');
       root.append(this.el);
       this.body = this.el.querySelector('tbody');
@@ -120,12 +133,21 @@
         pages = Math.max(1, Math.ceil(items.length / 5));
       this.page = Math.max(0, Math.min(this.page, pages - 1));
       const visible = items.slice(this.page * 5, this.page * 5 + 5);
+      if (this.body.firstElementChild?.dataset.empty === 'true') this.body.replaceChildren();
       while (this.body.rows.length > visible.length) this.body.deleteRow(-1);
       while (this.body.rows.length < visible.length) {
         const row = this.body.insertRow();
         row.insertCell();
         row.insertCell();
         row.insertCell();
+      }
+      if (!visible.length) {
+        const row = this.body.insertRow();
+        row.dataset.empty = 'true';
+        const cell = row.insertCell();
+        cell.colSpan = 3;
+        cell.className = 'analytics-empty-row';
+        text(cell, this.filter ? 'No matching observations' : 'Waiting for observations');
       }
       visible.forEach((v, i) => {
         const row = this.body.rows[i],
@@ -143,7 +165,7 @@
           cell.dataset.key = v.key;
         }
         cell.title = v.key;
-        row.cells[1].style.setProperty('--rank-percent', `${Math.min(100, num(v[this.metric]) / Math.max(1, ...this.items.map(x => num(x[this.metric]))) * 100)}%`);
+        row.cells[1].style.setProperty('--rank-percent', `${Math.min(100, num(v[this.metric]) / Math.max(1, ...items.map(x => num(x[this.metric]))) * 100)}%`);
         row.cells[1].title = `${num(v[this.metric]).toLocaleString()} ${this.metric}`;
         text(row.cells[1], format(v[this.metric], this.metric === 'bytes' ? 'B' : this.metric === 'duration' ? 's' : ''));
         text(row.cells[2], this.metric === 'flows' ? '' : format(this.metric === 'packets' ? v.bytes : v.packets, this.metric === 'packets' ? 'B' : ''));
@@ -158,23 +180,28 @@
     constructor(root, title) {
       this.el = document.createElement('section');
       this.el.className = 'panel analytics-distribution';
-      this.el.innerHTML = '<div class="panel-head"><strong></strong><small>by bytes</small></div><div class="distribution-body"><div class="distribution-ring"><strong>—</strong></div><div class="distribution-legend"></div></div>';
+      this.el.innerHTML = '<div class="panel-head"><strong></strong><small>Share of returned bytes</small></div><div class="distribution-body"><div class="distribution-ring"><strong>—</strong></div><div class="distribution-legend"></div></div>';
       text(this.el.querySelector('.panel-head strong'), title);
       root.append(this.el);
       this.legend = this.el.querySelector('.distribution-legend');
     }
     update(items) {
-      const total = items.reduce((a, x) => a + x.bytes, 0);
+      const shown = items.length > 4 ? [...items.slice(0, 3), {
+        key: 'Other shown groups',
+        bytes: items.slice(3).reduce((sum, x) => sum + num(x.bytes), 0),
+        packets: items.slice(3).reduce((sum, x) => sum + num(x.packets), 0)
+      }] : items;
+      const total = shown.reduce((sum, x) => sum + num(x.bytes), 0);
       let offset = 0;
       const stops = [];
-      while (this.legend.children.length > items.length) this.legend.lastChild.remove();
-      while (this.legend.children.length < items.length) {
+      while (this.legend.children.length > shown.length) this.legend.lastChild.remove();
+      while (this.legend.children.length < shown.length) {
         const row = document.createElement('div');
         row.innerHTML = '<i></i><span></span><strong></strong>';
         this.legend.append(row);
       }
-      items.forEach((x, i) => {
-        const share = total ? x.bytes / total * 100 : 0,
+      shown.forEach((x, i) => {
+        const share = total ? num(x.bytes) / total * 100 : 0,
           color = colors[i % colors.length];
         stops.push(`${color} ${offset}% ${offset + share}%`);
         offset += share;
@@ -185,7 +212,7 @@
         row.title = `${num(x.bytes).toLocaleString()} bytes · ${num(x.packets).toLocaleString()} packets`;
       });
       this.el.querySelector('.distribution-ring').style.background = total ? `conic-gradient(${stops.join(',')})` : '#edf1f6';
-      text(this.el.querySelector('.distribution-ring strong'), format(total));
+      text(this.el.querySelector('.distribution-ring strong'), total ? format(total) : 'No data');
     }
   }
   class TrafficChart {
@@ -469,18 +496,12 @@
           rate = values => seconds > 0 ? values.reduce((a, x) => a + x, 0) / seconds : null;
         const values = {
           bits: format(rate(p.bytes || [0, 0, 0, 0]) === null ? null : rate(p.bytes || [0, 0, 0, 0]) * 8, 'bit/s'),
-          packets: format(rate(p.packets || [0, 0, 0, 0]), 'packet/s'),
-          flows: format(seconds > 0 && !s.flow_limited ? p.flows / seconds : null, 'flow/s'),
           connections: format(seconds > 0 && !s.flow_limited ? p.connections / seconds : null, 'SYN/s'),
           active: format(s.flow_limited ? null : s.active_flows, ''),
-          tcp: format(s.flow_limited ? null : s.active_tcp, ''),
-          udp: format(s.flow_limited ? null : s.active_udp, ''),
-          total: format(s.totals.bytes),
-          totalPackets: format(s.totals.packets, ''),
-          totalFlows: format(s.flow_limited ? null : s.totals.flows, '')
+          total: format(s.totals.bytes)
         };
         Object.entries(values).forEach(([k, v]) => view.metrics[k]?.update(v));
-        view.arrows.forEach((a, i) => a.update(p, s.directions[i]));
+        view.directionMix.update(p);
         view.chart.update(points);
         if (view.name) {
           const k = s.kernel;
@@ -508,21 +529,14 @@
           }
         }
         view.distributions.protocols.update(s.groups.protocols || []);
-        view.distributions.directions.update(s.directions.map((x, i) => ({
-          ...x,
-          key: directions[i]
-        })));
         view.distributions.classification.update(s.groups.classification || []);
-        view.distributions.ip.update(s.groups.ip_versions || []);
         for (const [key, table] of Object.entries(view.tables)) table.update(s.groups[key] || [], filter);
         const flows = key => (s[key] || []).map(f => ({
           ...f,
           key: `${f.source.ip}:${f.source.port} → ${f.destination.ip}:${f.destination.port} · ${f.protocol} · ${f.application}`
         }));
-        view.flowTables.longest.update(flows('longest'), filter);
         view.flowTables.largest.update(flows('largest'), filter);
-        view.flowTables.most_packets.update(flows('most_packets'), filter);
-        text(view.coverage, `Captured totals and Top rankings since ${new Date(s.since).toLocaleString()}. Chart range: ${range}. Flows expire after ${s.idle_seconds}s idle; TCP FIN/RST closes activity. ${s.limited ? `Cardinality limit reached: Top rankings are partial.${s.flow_limited ? ' Flow counters unavailable.' : ''}` : 'Live captured observations.'}`);
+        text(view.coverage, `Totals and rankings since ${new Date(s.since).toLocaleString()} · Flows retained up to ${s.idle_seconds}s idle${s.limited ? ` · Capacity reached: rankings are partial${s.flow_limited ? '; flow counters unavailable' : ''}` : ''}`);
         view.coverage.classList.toggle('is-warning', s.limited);
         const existing = new Set([...view.scope.options].map(o => o.value));
         for (const name of s.interfaces || []) {
@@ -544,7 +558,18 @@
         range = 'live';
         filter = '';
         breadcrumb(name ? [['Interfaces', '#/interfaces'], [name, '#/interface/' + encodeURIComponent(name)]] : [['Top Analytics', '#/top-analytics']]);
-        page.innerHTML = `<div class="analytics-root"><div class="page-head"><div class="page-title"><h1>${name ? esc(name) + ' · Traffic Analytics' : 'Top Analytics / Traffic Summary'}</h1><p>Live network traffic, application visibility and observed conversations.</p></div><div class="page-actions"><span class="analytics-status">Connecting…</span></div></div><section class="panel analytics-toolbar"><label>Interface<select id="analyticsScope"><option value="">All capture interfaces</option></select></label><label>Chart range<select id="analyticsRange">${Object.keys(ranges).map(x => `<option value="${x}">${x === 'live' ? 'Live' : x}</option>`).join('')}</select></label><label>Filter Top rows<input id="analyticsFilter" type="search" placeholder="IP, port or application…"></label><button class="btn" id="analyticsPause">Pause live</button>${name ? '<a class="btn" href="#/interfaces">All interfaces</a>' : ''}</section><p class="analytics-coverage"></p><div class="analytics-metrics" id="analyticsMetrics"></div><div class="traffic-directions"></div><div id="analyticsChart"></div>${name ? '<section class="panel analytics-kernel"><div class="panel-head"><div><strong>Interface counters</strong><p class="panel-sub">Linux device totals since counter reset · includes traffic outside capture filters</p></div><div id="analyticsCaptureControl"></div></div><div class="analytics-metrics" id="kernelMetrics"></div><p id="analyticsCapture"></p></section>' : ''}<div class="analytics-distributions"></div><div class="analytics-section-heading"><h2>Top observed traffic</h2><span>Since telemetry start · top 20 per group · 5 rows per page</span></div><div class="analytics-top-grid"></div><div class="analytics-section-heading"><h2>Retained conversations</h2><span>Current idle-timeout window · duration is first-to-last packet observation</span></div><div class="analytics-flow-grid"></div><p class="analytics-note">Directions describe the monitored host; forwarded observations are counted once per capture interface. Global totals can include the same wire packet observed at multiple interfaces. Port rankings count both endpoint port incidences. Connection counters count first observed TCP SYNs, not confirmed handshakes. Application labels use parsed protocol payload, HTTP Host or TLS SNI; they do not identify decrypted content or an installed client. Encrypted or unsupported traffic remains Unknown / Unclassified. Replay is excluded.</p></div>`;
+        page.innerHTML = `<div class="analytics-root">
+          <div class="page-head"><div class="page-title"><h1>${name ? esc(name) + ' · Traffic Analytics' : 'Top Analytics / Traffic Summary'}</h1><p>Current traffic, connection attempts, and the endpoints driving them.</p></div><div class="page-actions"><span class="analytics-status">Connecting…</span></div></div>
+          <section class="panel analytics-toolbar"><label>Interface<select id="analyticsScope"><option value="">All capture interfaces</option></select></label><label>Chart range<select id="analyticsRange">${Object.keys(ranges).map(x => `<option value="${x}">${x === 'live' ? 'Live' : x}</option>`).join('')}</select></label><label>Filter rankings<input id="analyticsFilter" type="search" placeholder="IP, port or application…"></label><button class="btn" id="analyticsPause">Pause live</button>${name ? '<a class="btn" href="#/interfaces">All interfaces</a>' : ''}</section>
+          <p class="analytics-coverage"></p>
+          <div class="analytics-summary"><div class="analytics-metrics" id="analyticsMetrics"></div><div id="analyticsDirection"></div></div>
+          <div id="analyticsChart"></div>
+          ${name ? '<section class="panel analytics-kernel"><div class="panel-head"><div><strong>Interface counters</strong><p class="panel-sub">Linux device totals since counter reset · includes traffic outside capture filters</p></div><div id="analyticsCaptureControl"></div></div><div class="analytics-metrics" id="kernelMetrics"></div><p id="analyticsCapture"></p></section>' : ''}
+          <div class="analytics-distributions"></div>
+          <div class="analytics-section-heading"><h2>Investigation rankings</h2><span>Captured traffic since telemetry start · top 20 per group</span></div><div class="analytics-top-grid"></div>
+          <div class="analytics-flow-grid"></div>
+          <details class="analytics-method"><summary>How to read these measurements</summary><p>Directions are relative to the monitored host. Sensor-owned traffic is excluded from these live summaries; device counters still show raw capture activity. Global totals may count the same wire packet on multiple interfaces. TCP SYNs indicate first observed connection attempts, not confirmed handshakes. Port rankings include both endpoint ports and may include ephemeral ports. Application labels come from observed protocol payload or host metadata, not decrypted content. Retained conversations expire after inactivity. Replay traffic is excluded.</p></details>
+        </div>`;
         const root = page.querySelector('.analytics-root');
         view = {
           name,
@@ -556,11 +581,11 @@
           tables: {},
           flowTables: {},
           distributions: {},
-          arrows: []
+          directionMix: null
         };
-        const defs = [['bits', 'Captured bit/s', 'All four directions'], ['packets', 'Captured packet/s', 'Decoded live packets'], ['flows', 'New flows/s', 'First observed conversations'], ['connections', 'New connections/s', 'Unique observed TCP SYNs'], ['active', 'Active flows', 'Within configured idle timeout'], ['tcp', 'Active TCP', 'Observed, not OS socket state'], ['udp', 'Active UDP', 'Within configured idle timeout'], ['total', 'Captured bytes', 'Since telemetry start'], ['totalPackets', 'Captured packets', 'Since telemetry start'], ['totalFlows', 'Observed flows', 'Since telemetry start']];
+        const defs = [['bits', 'Live throughput', 'Captured bit/s · all directions'], ['connections', 'New TCP SYNs', 'Observed attempts per second'], ['active', 'Active flows', 'Within the idle-timeout window'], ['total', 'Captured volume', 'Bytes since telemetry start']];
         defs.forEach(([k, l, h]) => view.metrics[k] = new LiveMetricCard(root.querySelector('#analyticsMetrics'), l, h));
-        for (let i = 0; i < 3; i++) view.arrows.push(new TrafficDirection(root.querySelector('.traffic-directions'), i));
+        view.directionMix = new DirectionMix(root.querySelector('#analyticsDirection'));
         view.chart = new TrafficChart(root.querySelector('#analyticsChart'), !!name);
         if (name) {
           [['currentIn', 'Current In', 'RX bit/s'], ['currentOut', 'Current Out', 'TX bit/s'], ['rx', 'Total RX', 'Device bytes'], ['tx', 'Total TX', 'Device bytes'], ['rxPackets', 'Packets RX', 'Device packets'], ['txPackets', 'Packets TX', 'Device packets'], ['rxErrors', 'Errors RX', 'Device errors'], ['txErrors', 'Errors TX', 'Device errors'], ['rxDrops', 'Dropped RX', 'Device drops'], ['txDrops', 'Dropped TX', 'Device drops']].forEach(([k, l, h]) => view.metrics[k] = new LiveMetricCard(root.querySelector('#kernelMetrics'), l, h));
@@ -575,10 +600,10 @@
             root.querySelector('#analyticsCaptureControl').append(view.control);
           }
         }
-        [['protocols', 'Protocol distribution'], ['directions', 'Traffic directions'], ['classification', 'Application visibility'], ['ip', 'IPv4 / IPv6']].forEach(([key, title]) => view.distributions[key] = new Distribution(root.querySelector('.analytics-distributions'), title));
-        const tops = [['sources', 'Top sources / senders'], ['destinations', 'Top destinations / receivers'], ['endpoints', 'Top IPs · sent + received'], ['connection_sources', 'Top connection initiators', 'flows'], ['connection_destinations', 'Top connection receivers', 'flows'], ['flow_sources', 'Top first-seen flow sources', 'flows'], ['flow_destinations', 'Top first-seen flow destinations', 'flows'], ['active_sources', 'Top active flow sources', 'flows'], ['tcp_ports', 'Top TCP ports'], ['udp_ports', 'Top UDP ports'], ['services', 'Top detected services'], ['applications', 'Top DPI applications', 'bytes', true], ['packet_sizes', 'Packet size distribution', 'packets'], ['direction_inbound', 'Top inbound traffic'], ['direction_outbound', 'Top outbound traffic'], ['direction_forwarded', 'Top forwarded traffic']];
+        [['protocols', 'Protocols'], ['classification', 'Application visibility']].forEach(([key, title]) => view.distributions[key] = new Distribution(root.querySelector('.analytics-distributions'), title));
+        const tops = [['sources', 'Top sources'], ['destinations', 'Top destinations'], ['connection_sources', 'TCP connection initiators', 'flows'], ['tcp_ports', 'TCP ports'], ['applications', 'Observed applications', 'bytes', true]];
         tops.forEach(([key, title, metric, apps]) => view.tables[key] = new TopTable(root.querySelector('.analytics-top-grid'), title, metric, apps));
-        [['longest', 'Longest observed open connections', 'duration'], ['largest', 'Largest retained flows', 'bytes'], ['most_packets', 'Most packets per retained flow', 'packets']].forEach(([key, title, metric]) => view.flowTables[key] = new TopTable(root.querySelector('.analytics-flow-grid'), title, metric));
+        view.flowTables.largest = new TopTable(root.querySelector('.analytics-flow-grid'), 'Largest retained flows', 'bytes');
         view.scope.onchange = e => {
           location.hash = e.target.value ? '#/interface/' + encodeURIComponent(e.target.value) : '#/top-analytics';
         };

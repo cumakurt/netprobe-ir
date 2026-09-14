@@ -37,39 +37,48 @@ The complete license text is in `LICENSE`; `AUTHORS` and `COPYRIGHT` contain dev
 
 ## Product tour
 
-The screenshots below are captured from the v1.0.0 web console and show real product views rather than illustrative mockups.
+These screenshots show the current v1.0.0 web console with **synthetic demonstration data**, captured in an isolated network namespace. The addresses and domains are documentation examples; the findings are invented, not real incident evidence. Each image is marked **SYNTHETIC DEMO DATA**.
 
 ### Executive overview
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-35-35%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR executive overview" width="900">
+  <img src="img/overview.png" alt="NetProbe IR executive overview with synthetic findings and traffic" width="900">
 </p>
 
-### Investigation graph
+### Top Analytics / Traffic Summary
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-37-31%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="Interactive NetProbe IR investigation graph" width="900">
+  <img src="img/top-analytics.png" alt="NetProbe IR live traffic metrics and direction chart with synthetic data" width="900">
 </p>
 
-### Attack stories and detection quality
+### Security findings and investigation graph
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-37-59%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR attack stories" width="900">
+  <img src="img/security-findings.png" alt="NetProbe IR security findings with synthetic IOC and behavioral examples" width="900">
 </p>
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-38-08%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR detection quality center" width="900">
+  <img src="img/investigation-graph.png" alt="NetProbe IR investigation graph linking synthetic flows, processes and findings" width="900">
 </p>
 
-### SOC performance and telemetry health
+### Incident case and host triage
 
 <p align="center">
-  <img src="img/Screenshot%202026-09-13%20at%2010-38-25%20NetProbe%20IR%20%E2%80%94%20Security%20%26%20Network%20Forensics%20Console.png" alt="NetProbe IR SOC performance and telemetry health" width="900">
+  <img src="img/host-triage.png" alt="NetProbe IR incident case showing a synthetic host triage snapshot" width="900">
 </p>
 
-Additional views are available in the [`img/`](img/) directory.
+<details>
+<summary>More console screenshots</summary>
 
+- [Traffic investigation rankings](img/traffic-rankings.png)
+- [Live flow table](img/live-traffic.png)
+- [Attack stories](img/attack-stories.png)
+- [Detection quality](img/detection-quality.png)
+- [Incident case overview](img/incident-case.png)
 
+</details>
+
+Run `scripts/capture-readme-screenshots.sh` to regenerate all images from the isolated synthetic fixture. The script replaces `img/` only after every capture succeeds and validates.
 
 
 

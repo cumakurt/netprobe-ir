@@ -226,7 +226,7 @@ func (s *Server) assetIntelligenceAPI(w http.ResponseWriter, r *http.Request) {
 		inv.Packages, _ = assetintel.ParseDPKGStatus("/var/lib/dpkg/status")
 	}
 	seenContainers := map[string]bool{}
-	for _, f := range s.Engine.Flows(5000) {
+	for _, f := range s.Engine.VisibleFlows(5000) {
 		if f.Process == nil || strings.TrimSpace(f.Process.ContainerID) == "" {
 			continue
 		}

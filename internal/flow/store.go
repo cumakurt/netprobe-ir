@@ -100,6 +100,13 @@ func (s *Store) SetRisk(id string, score int, reasons []string) {
 		f.RiskReasons = append([]string(nil), reasons...)
 	}
 }
+func (s *Store) MarkSensorTraffic(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f := s.flows[id]; f != nil {
+		f.SensorTraffic = true
+	}
+}
 func (s *Store) Snapshot(limit int) []model.Flow {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -148,6 +155,25 @@ func (s *Store) Counts() (total, active int) {
 		}
 	}
 	return
+}
+func (s *Store) VisibleCounts() (total, active, processes int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cut := time.Now().Add(-s.idle)
+	seen := map[int]bool{}
+	for _, f := range s.flows {
+		if f.SensorTraffic {
+			continue
+		}
+		total++
+		if f.LastSeen.After(cut) {
+			active++
+		}
+		if f.Process != nil && f.Process.PID > 0 {
+			seen[f.Process.PID] = true
+		}
+	}
+	return total, active, len(seen)
 }
 func (s *Store) ProcessCount() int {
 	s.mu.RLock()

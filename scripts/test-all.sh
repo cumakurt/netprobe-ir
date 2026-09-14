@@ -10,7 +10,7 @@ if [[ -n "$unformatted" ]]; then echo "$unformatted"; exit 1; fi
 echo '==> shell syntax'
 sh -n install.sh uninstall.sh scripts/install.sh scripts/uninstall.sh \
   packaging/openrc/netprobe-ir packaging/runit/run packaging/sysv/netprobe-ir
-bash -n scripts/build-static.sh scripts/release-metadata.sh scripts/build-ebpf-core.sh scripts/test-all.sh scripts/integration-live-linux.sh scripts/integration-live-tls-linux.sh scripts/integration-ui-browser.sh
+bash -n scripts/build-static.sh scripts/release-metadata.sh scripts/build-ebpf-core.sh scripts/test-all.sh scripts/integration-live-linux.sh scripts/integration-live-tls-linux.sh scripts/integration-ui-browser.sh scripts/capture-readme-screenshots.sh
 
 if command -v python3 >/dev/null 2>&1; then
   echo '==> JSON configuration syntax'
@@ -39,6 +39,7 @@ if command -v node >/dev/null 2>&1; then
   node --check internal/server/static/app.js
   node --check internal/server/static/analytics.js
   node --check scripts/ui-e2e.js
+  node --check scripts/capture-readme-screenshots.js
 else
   echo '==> embedded web JavaScript syntax: SKIP (node not installed; not a runtime dependency)'
 fi

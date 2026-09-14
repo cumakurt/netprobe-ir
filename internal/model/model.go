@@ -19,6 +19,7 @@ type Endpoint struct {
 type ProcessInfo struct {
 	PID                 int    `json:"pid"`
 	PPID                int    `json:"ppid,omitempty"`
+	StartTimeTicks      uint64 `json:"start_time_ticks,omitempty"`
 	UID                 int    `json:"uid,omitempty"`
 	User                string `json:"user,omitempty"`
 	Comm                string `json:"comm,omitempty"`
@@ -145,6 +146,7 @@ type Flow struct {
 	Risk            int          `json:"risk"`
 	RiskReasons     []string     `json:"risk_reasons,omitempty"`
 	Attribution     string       `json:"attribution"`
+	SensorTraffic   bool         `json:"-"`
 }
 
 type Alert struct {
@@ -210,6 +212,7 @@ type PacketSummary struct {
 	Process         *ProcessInfo `json:"process,omitempty"`
 	DPI             DPIInfo      `json:"dpi"`
 	Attribution     string       `json:"attribution"`
+	SensorTraffic   bool         `json:"-"`
 }
 
 // YaraMatch is a malware-rule match returned by an external YARA-X scanner.

@@ -327,7 +327,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, map[string]any{"status": s.Engine.Status(), "capture_health": s.Engine.CaptureHealth(), "last_error": s.Engine.LastError(), "ids_load_errors": idsLoadErrors})
 }
 func (s *Server) flows(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, s.Engine.Flows(limit(r, 500)))
+	jsonOut(w, s.Engine.VisibleFlows(limit(r, 500)))
 }
 func (s *Server) flowDetail(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/flows/")
@@ -354,7 +354,7 @@ func (s *Server) processDetail(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, d)
 }
 func (s *Server) packets(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, s.Engine.Packets(limit(r, 300)))
+	jsonOut(w, s.Engine.VisiblePackets(limit(r, 300)))
 }
 func (s *Server) packetDetail(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/packets/")
@@ -562,6 +562,24 @@ func (s *Server) caseDetail(w http.ResponseWriter, r *http.Request) {
 		c, e := s.Engine.Case(id)
 		if e != nil {
 			http.NotFound(w, r)
+			return
+		}
+		jsonOut(w, c)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "triage" && r.Method == http.MethodPost {
+		if err := s.require(r, "case:write"); err != nil {
+			jsonError(w, err.Error(), 403)
+			return
+		}
+		if !sameOrigin(r) {
+			jsonError(w, "cross-origin mutation rejected", 403)
+			return
+		}
+		c, err := s.Engine.CaptureCaseTriage(r.Context(), id, principal(r).Username)
+		s.auditEvent(r, "case.triage", id, errString(err), err == nil)
+		if err != nil {
+			jsonError(w, err.Error(), 400)
 			return
 		}
 		jsonOut(w, c)
@@ -1212,8 +1230,8 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}()}
 		if tick == 1 || tick%5 == 0 {
-			v["flows"] = s.Engine.Flows(250)
-			v["packets"] = s.Engine.Packets(250)
+			v["flows"] = s.Engine.VisibleFlows(250)
+			v["packets"] = s.Engine.VisiblePackets(250)
 			v["processes"] = s.Engine.Processes()
 			v["alerts"] = s.Engine.Alerts(150)
 			v["findings"] = s.Engine.Findings(300)

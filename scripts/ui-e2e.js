@@ -104,9 +104,20 @@ async function main(){
   // Analytics uses captured packets and kernel counters from the real loopback device.
   await cdp.eval(`document.querySelector('[data-route="top-analytics"]').click()`);
   await retry(()=>cdp.eval(`document.querySelector('.analytics-status')?.textContent.startsWith('Live') && Number(document.querySelector('.analytics-chart canvas')?.dataset.points)>0`));
+  const sensorPort=Number(process.env.NETPROBE_SENSOR_PORT);
+  const visibleTelemetry=await (await fetch(base+'/api/v1/telemetry')).json();
+  const visibleFlows=await (await fetch(base+'/api/v1/flows?limit=5000')).json();
+  assert(!(visibleTelemetry.snapshot.groups.tcp_ports||[]).some(x=>Number(x.key)===sensorPort),'sensor listener appeared in Top Analytics: '+JSON.stringify((visibleTelemetry.snapshot.groups.tcp_ports||[]).filter(x=>Number(x.key)===sensorPort)));
+  assert(!visibleFlows.some(x=>x.local.port===sensorPort||x.remote.port===sensorPort),'sensor listener appeared in visible flows: '+JSON.stringify(visibleFlows.filter(x=>x.local.port===sensorPort||x.remote.port===sensorPort)));
+  assert((visibleTelemetry.snapshot.groups.udp_ports||[]).some(x=>Number(x.key)===19001),'unrelated traffic was filtered from Top Analytics');
+  assert(await cdp.eval(`document.querySelectorAll('#analyticsMetrics .analytics-metric').length===4 && document.querySelectorAll('.analytics-direction-list>div').length===4 && document.querySelectorAll('.analytics-distribution').length===2 && document.querySelectorAll('.analytics-top-grid .analytics-top').length===5 && document.querySelectorAll('.analytics-flow-grid .analytics-top').length===1`),'traffic summary did not render the focused investigation layout');
   await cdp.eval(`window.__analyticsCanvas=document.querySelector('.analytics-chart canvas');document.getElementById('analyticsFilter').focus();document.getElementById('analyticsFilter').value='loopback draft'`);
   await sleep(2200);
   assert(await cdp.eval(`document.activeElement.id==='analyticsFilter' && document.getElementById('analyticsFilter').value==='loopback draft' && window.__analyticsCanvas===document.querySelector('.analytics-chart canvas')`),'live analytics replaced DOM or input focus');
+  await cdp.eval(`(()=>{const input=document.getElementById('analyticsFilter');input.value='no-such-observation';input.dispatchEvent(new Event('input'));})()`);
+  assert(await cdp.eval(`document.querySelectorAll('.analytics-top-grid .analytics-empty-row').length===5`),'filtered rankings did not show their empty state');
+  await cdp.eval(`(()=>{const input=document.getElementById('analyticsFilter');input.value='';input.dispatchEvent(new Event('input'));})()`);
+  await retry(()=>cdp.eval(`document.querySelector('.analytics-top-grid .analytics-top tbody tr:not([data-empty])')!==null`));
   await cdp.eval(`document.getElementById('analyticsFilter').value='';document.getElementById('analyticsPause').click()`);
   const frozen=await cdp.eval(`document.querySelector('#analyticsMetrics').textContent`);
   await sleep(1600);

@@ -4,6 +4,12 @@
 
 This file distinguishes **implemented and release-tested behavior** from environment-conditional capabilities and deliberate non-claims. It is intended to prevent feature names in the UI from being mistaken for guarantees the sensor cannot technically make.
 
+## Unreleased development: on-demand host triage
+
+An unlocked incident case with an attributed local process can now capture a read-only Linux snapshot through **Capture host triage** or `POST /api/v1/cases/{id}/triage`. The snapshot records the collecting user and time, hostname, process PID/name/UID/login UID/audit session ID/executable/cgroup/start ticks, a SHA-256 digest of the target executable when it is readable and at most 64 MiB, up to eight ancestors, up to 128 socket connections linked through that process's file descriptors, and metadata for up to 128 regular open files. It also inventories the matching systemd service unit and drop-ins, plus bounded host cron file metadata. Regular persistence files up to 1 MiB receive SHA-256 hashes; symlinks are recorded without following them. If `/usr/bin/journalctl` is available, up to 100 PID-scoped journal entries from a bounded one-hour window contribute timestamps, boot/unit/priority identifiers, message lengths and SHA-256 digests. Raw journal messages, open file contents and persistence file contents are not retained. A case stores at most eight snapshots. Signed case exports include each snapshot as `triage-NNN.json` and cover it with the existing evidence manifest.
+
+Collection requires `case:write`, uses the existing origin and audit controls, and rejects locked cases. The process name, executable and start ticks recorded with new process telemetry are compared with the live PID; a second start-time read also detects replacement during collection. Legacy cases without recorded start ticks display a PID-reuse warning. Missing permissions, unavailable journald and truncated scans appear as snapshot warnings. Host cron files and PID-scoped journal entries are investigation hints, not proof that they belong to the recorded process. Command lines, environment variables, memory, file contents and raw log messages remain outside this collection scope.
+
 ## Implemented v1.0 investigation / notification / live-traffic path
 
 - Canvas Investigation Graph with interactive zoom/pan/select/drag/rectangle-selection and session node positions;

@@ -240,6 +240,49 @@ func (t *Tracker) Lookup(proto, srcIP string, srcPort uint16, dstIP string, dstP
 	return nil, "socket-not-mapped"
 }
 
+// OwnsConnection identifies traffic involving a socket owned by the sensor.
+// Both endpoints are checked because loopback client traffic may be attributed
+// to the client even when the destination is the sensor's listener.
+func (t *Tracker) OwnsConnection(proto, srcIP string, srcPort uint16, dstIP string, dstPort uint16, pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	proto = strings.ToUpper(proto)
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for _, key := range []string{socketKey(proto, srcIP, srcPort, dstIP, dstPort), socketKey(proto, dstIP, dstPort, srcIP, srcPort)} {
+		if entry, ok := t.kernelExact[key]; ok && entry.Process.PID == pid && time.Since(entry.Time) < 10*time.Minute {
+			return true
+		}
+		if process, ok := t.exact[key]; ok && process.PID == pid && time.Since(t.lastRefresh) < 5*time.Second {
+			return true
+		}
+	}
+	if time.Since(t.lastRefresh) >= 5*time.Second {
+		return false
+	}
+	for _, endpoint := range []struct {
+		ip   string
+		port uint16
+	}{{srcIP, srcPort}, {dstIP, dstPort}} {
+		if !t.localIPs[endpoint.ip] {
+			continue
+		}
+		for _, address := range []string{endpoint.ip, "*"} {
+			if process, ok := t.local[localKey(proto, address, endpoint.port)]; ok && process.PID == pid {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (t *Tracker) IsLocalAddress(ip string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.localIPs[ip]
+}
+
 func socketKey(proto, lip string, lp uint16, rip string, rp uint16) string {
 	return fmt.Sprintf("%s|%s:%d|%s:%d", proto, lip, lp, rip, rp)
 }
@@ -347,6 +390,14 @@ func scanProcessSockets(need map[string]bool) map[string]model.ProcessInfo {
 func readProcess(pid int) model.ProcessInfo {
 	base := fmt.Sprintf("/proc/%d", pid)
 	p := model.ProcessInfo{PID: pid, UID: -1}
+	if b, e := os.ReadFile(filepath.Join(base, "stat")); e == nil {
+		if end := strings.LastIndexByte(string(b), ')'); end >= 0 && end+2 < len(b) {
+			fields := strings.Fields(string(b[end+2:]))
+			if len(fields) > 19 {
+				p.StartTimeTicks, _ = strconv.ParseUint(fields[19], 10, 64)
+			}
+		}
+	}
 	if b, e := os.ReadFile(filepath.Join(base, "comm")); e == nil {
 		p.Comm = strings.TrimSpace(string(b))
 	}

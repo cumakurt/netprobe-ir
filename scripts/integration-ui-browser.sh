@@ -18,8 +18,8 @@ if [[ "${NETPROBE_UI_NS:-}" != "1" ]]; then
   exec unshare -Urn env NETPROBE_UI_NS=1 BIN="$BIN" CHROME="$CHROME" bash "$0"
 fi
 ip link set lo up
-TMP="$(mktemp -d)"; NPID=''; CPID=''
-cleanup(){ if [[ -n "$CPID" ]]; then kill "$CPID" 2>/dev/null || true; wait "$CPID" 2>/dev/null || true; fi; if [[ -n "$NPID" ]]; then kill "$NPID" 2>/dev/null || true; wait "$NPID" 2>/dev/null || true; fi; rm -rf "$TMP" 2>/dev/null || true; }
+TMP="$(mktemp -d)"; NPID=''; CPID=''; TPID=''
+cleanup(){ if [[ -n "$CPID" ]]; then kill "$CPID" 2>/dev/null || true; wait "$CPID" 2>/dev/null || true; fi; if [[ -n "$TPID" ]]; then kill "$TPID" 2>/dev/null || true; wait "$TPID" 2>/dev/null || true; fi; if [[ -n "$NPID" ]]; then kill "$NPID" 2>/dev/null || true; wait "$NPID" 2>/dev/null || true; fi; rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 pick_port(){ python3 - <<'PY'
 import socket
@@ -34,9 +34,19 @@ JSON
 for _ in $(seq 1 80); do curl -fsS "http://127.0.0.1:$PORT/api/v1/status" >/dev/null 2>&1 && break; sleep .1; done
 curl -fsS "http://127.0.0.1:$PORT/" >/dev/null
 for _ in $(seq 1 16); do curl -fsS "http://127.0.0.1:$PORT/api/v1/health" >/dev/null; done
+# Exercise the visible analytics path with traffic from an unrelated process.
+python3 - <<'PY' &
+import socket,time
+sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+for _ in range(240):
+    sock.sendto(b'ui-regression-traffic',('127.0.0.1',19001))
+    time.sleep(.25)
+sock.close()
+PY
+TPID=$!
 sleep 1
 mkdir -p "$TMP/chrome"
 "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port="$DPORT" --user-data-dir="$TMP/chrome" "http://127.0.0.1:$PORT/#/overview" >"$TMP/chrome.log" 2>&1 & CPID=$!
 for _ in $(seq 1 100); do curl -fsS "http://127.0.0.1:$DPORT/json/list" >/dev/null 2>&1 && break; sleep .1; done
-NETPROBE_URL="http://127.0.0.1:$PORT" CHROME_PORT="$DPORT" node "$ROOT/scripts/ui-e2e.js"
+NETPROBE_URL="http://127.0.0.1:$PORT" NETPROBE_SENSOR_PORT="$PORT" CHROME_PORT="$DPORT" node "$ROOT/scripts/ui-e2e.js"
 echo 'PASS: real Chromium end-to-end console interactions'

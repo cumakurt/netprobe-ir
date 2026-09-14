@@ -13,6 +13,18 @@ This directory contains the versioned technical and operational documentation fo
 - [Web console design](UI_DESIGN.md) — interaction model, accessibility and evidence-oriented UI decisions.
 - [Supply-chain controls](SUPPLY_CHAIN.md) — SBOM, provenance, checksums and optional signatures.
 
+## Console previews
+
+These are current console screenshots with synthetic demonstration data, not real incident evidence. See the [full product tour](../README.md#product-tour) for more views.
+
+<p align="center">
+  <a href="../img/traffic-rankings.png"><img src="../img/traffic-rankings.png" alt="Synthetic traffic investigation rankings in Top Analytics" width="800"></a>
+</p>
+
+<p align="center">
+  <a href="../img/incident-case.png"><img src="../img/incident-case.png" alt="Synthetic incident case with preserved findings and host triage" width="800"></a>
+</p>
+
 ## Operations and detection
 
 - [Authentication and SOC security](AUTH_SECURITY.md)

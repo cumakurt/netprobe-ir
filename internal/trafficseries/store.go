@@ -85,7 +85,7 @@ func (s *Store) consume(ev eventbus.Event) {
 		return
 	}
 	p, ok := ev.Payload.(model.PacketSummary)
-	if !ok {
+	if !ok || p.SensorTraffic {
 		return
 	}
 	s.mu.Lock()

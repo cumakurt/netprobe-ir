@@ -63,6 +63,7 @@ import (
 	"netprobe-ir/internal/timeline"
 	"netprobe-ir/internal/tlsintel"
 	"netprobe-ir/internal/trafficseries"
+	"netprobe-ir/internal/triage"
 	"netprobe-ir/internal/tuning"
 	"netprobe-ir/internal/vulnintel"
 	"netprobe-ir/internal/wasmplugin"
@@ -147,6 +148,8 @@ type Engine struct {
 	captures           map[string]*captureSession
 	backgroundStart    sync.Once
 	attributionBackend string
+	consoleListenHost  string
+	consoleListenPort  uint16
 	afxdpAvailable     bool
 	afxdpReason        string
 	beaconGroups       []beacon.Group
@@ -157,6 +160,12 @@ func New(c config.Config) *Engine {
 	an := anomaly.New(anomaly.Config{ExfiltrationBytes: c.Anomaly.ExfiltrationMB << 20, FanoutDestinations: c.Anomaly.FanoutDestinations, PortScanPorts: c.Anomaly.PortScanPorts, BurstConnections: c.Anomaly.BurstConnections, BeaconMinSamples: c.Anomaly.BeaconMinSamples, BeaconMaxJitter: c.Anomaly.BeaconMaxJitter, DNSEntropyThreshold: c.Anomaly.DNSEntropyThreshold})
 	id := ids.New(ids.Config{Enabled: c.IDS.Enabled, HomeNets: c.IDS.HomeNets, PortScanPorts: c.IDS.PortScanPorts, HostSweepHosts: c.IDS.HostSweepHosts, WindowSeconds: c.IDS.WindowSeconds, DNSHighEntropyQueries: c.IDS.DNSHighEntropyQueries, NXDomainThreshold: c.IDS.NXDomainThreshold, IOCFile: c.IDS.IOCFile, RulesFile: c.IDS.RulesFile, RulesSignature: c.IDS.RulesSignature, RulesTrustedPublicKey: c.IDS.RulesTrustedPublicKey, RequireSignedRules: c.IDS.RequireSignedRules, MaxFindings: c.IDS.MaxFindings, RuleLabMode: c.IDS.RuleLabMode})
 	e := &Engine{AccessLog: accesslog.New(), Config: c, Started: time.Now(), Store: flow.New(time.Duration(c.Capture.FlowIdleSeconds) * time.Second), DPI: dpi.New(c.DPI.MaxStreamBytes), Proc: procmap.New(), Anomaly: an, IDS: id, frames: make(chan capture.Frame, 16384), packets: make([]model.PacketSummary, 0, packetHistoryLimit), runtimeEvents: make([]model.RuntimeEvent, 0, 2000), captures: map[string]*captureSession{}, attributionBackend: "proc"}
+	if host, port, err := net.SplitHostPort(c.Listen); err == nil {
+		if parsed, err := strconv.ParseUint(port, 10, 16); err == nil {
+			e.consoleListenHost = host
+			e.consoleListenPort = uint16(parsed)
+		}
+	}
 	e.Quality = detectionquality.New(filepath.Join(c.DataDir, "detection-quality", "runs.json"))
 	e.Analytics = analytics.Open(filepath.Join(c.DataDir, "analytics", "events.jsonl"), c.Analytics.MaxEvents)
 	e.DNSGraph = dnsgraph.New()
@@ -587,6 +596,39 @@ func (e *Engine) processor(ctx context.Context) {
 
 func (e *Engine) ProcessFrame(fr capture.Frame)       { e.processFrame(fr, true) }
 func (e *Engine) ProcessReplayFrame(fr capture.Frame) { e.processFrame(fr, false) }
+
+func (e *Engine) isConsoleTraffic(p *decode.Packet) bool {
+	if p.Protocol != "TCP" || e.consoleListenPort == 0 {
+		return false
+	}
+	for _, endpoint := range []struct {
+		ip   string
+		port uint16
+	}{{p.SrcIP, p.SrcPort}, {p.DstIP, p.DstPort}} {
+		if endpoint.port != e.consoleListenPort {
+			continue
+		}
+		address := net.ParseIP(endpoint.ip)
+		if address == nil || (!address.IsLoopback() && !e.Proc.IsLocalAddress(endpoint.ip)) {
+			continue
+		}
+		switch e.consoleListenHost {
+		case "", "0.0.0.0", "::":
+			return true
+		case "localhost":
+			if address.IsLoopback() {
+				return true
+			}
+		default:
+			host, _, _ := strings.Cut(e.consoleListenHost, "%")
+			if listenIP := net.ParseIP(host); listenIP != nil && listenIP.Equal(address) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 	p, err := decode.ParseEthernet(fr.Data, fr.Time, fr.Interface, fr.Direction)
 	if err != nil {
@@ -610,24 +652,32 @@ func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 	id := flow.Key(p, localIP, localPort, remoteIP, remotePort)
 	di, observations := e.DPI.InspectObserved(id, dir, p)
 	f, created := e.Store.Observe(p, proc, attr, di, localIP, localPort, remoteIP, remotePort, dir)
-	if attributeProcess && created && e.NetworkBaseline != nil {
+	sensorTraffic := attributeProcess && (e.isConsoleTraffic(p) || (proc != nil && proc.PID == os.Getpid()) || e.Proc.OwnsConnection(p.Protocol, p.SrcIP, p.SrcPort, p.DstIP, p.DstPort, os.Getpid()))
+	if sensorTraffic || f.SensorTraffic {
+		sensorTraffic = true
+		f.SensorTraffic = true
+		e.Store.MarkSensorTraffic(f.ID)
+	}
+	if attributeProcess && created && !sensorTraffic && e.NetworkBaseline != nil {
 		_ = e.NetworkBaseline.Observe(f)
 	}
-	if created && e.Analytics != nil {
+	if created && !sensorTraffic && e.Analytics != nil {
 		procName := ""
 		if f.Process != nil {
 			procName = f.Process.Comm
 		}
 		_ = e.Analytics.Append(analytics.Event{Time: f.FirstSeen, Type: "flow", Process: procName, Destination: f.Remote.IP, Key: f.ID, Meta: map[string]any{"protocol": f.NetworkProtocol, "application": f.DPI.Application, "direction": f.Direction}})
 	}
-	if e.DNSGraph != nil && di.DNS != nil && di.DNS.Query != "" && len(di.DNS.Answers) > 0 {
+	if !sensorTraffic && e.DNSGraph != nil && di.DNS != nil && di.DNS.Query != "" && len(di.DNS.Answers) > 0 {
 		e.DNSGraph.Observe(di.DNS.Query, di.DNS.Answers, p.Time)
 	}
-	if e.TLSIntel != nil && di.TLS != nil && di.TLS.Certificate != nil {
+	if !sensorTraffic && e.TLSIntel != nil && di.TLS != nil && di.TLS.Certificate != nil {
 		e.TLSIntel.Observe(f)
 	}
-	packetID := e.recordPacket(p, proc, attr, di, id, dir)
-	e.recordAccess(p, f, observations, created)
+	packetID := e.recordPacket(p, proc, attr, di, id, dir, sensorTraffic)
+	if !sensorTraffic {
+		e.recordAccess(p, f, observations, created)
+	}
 	decision := e.SmartPolicy.Decide(p, f)
 	if e.Recorder != nil {
 		if evidenceFrame, ok := smartpcap.Apply(decision, p, fr); ok && !e.Recorder.Record(evidenceFrame) {
@@ -761,7 +811,7 @@ func (e *Engine) processFrame(fr capture.Frame, attributeProcess bool) {
 		f = latest
 	}
 	e.publishTelemetry(p, f, proc, di, packetID)
-	if attributeProcess && e.Telemetry != nil {
+	if attributeProcess && !sensorTraffic && e.Telemetry != nil {
 		e.Telemetry.Observe(model.PacketSummary{Time: p.Time, Interface: p.Interface, Direction: dir, NetworkProtocol: p.Protocol, IPVersion: p.IPVersion, Source: model.Endpoint{IP: p.SrcIP, Port: p.SrcPort}, Destination: model.Endpoint{IP: p.DstIP, Port: p.DstPort}, Length: len(p.Raw), TCPFlags: decode.TCPFlagsString(p.TCPFlags), FlowID: f.ID, DPI: di})
 	}
 }
@@ -776,7 +826,7 @@ func (e *Engine) publishTelemetry(p *decode.Packet, f model.Flow, proc *model.Pr
 	if e.EventBus == nil {
 		return
 	}
-	packet := model.PacketSummary{ID: packetID, Time: p.Time, Interface: p.Interface, Direction: f.Direction, NetworkProtocol: p.Protocol, IPVersion: p.IPVersion, Source: model.Endpoint{IP: p.SrcIP, Port: p.SrcPort}, Destination: model.Endpoint{IP: p.DstIP, Port: p.DstPort}, Length: len(p.Raw), TCPFlags: decode.TCPFlagsString(p.TCPFlags), ToS: p.ToS, VLANID: p.VLANID, ICMPType: p.ICMPType, ICMPCode: p.ICMPCode, FlowID: f.ID, DPI: di, Attribution: f.Attribution}
+	packet := model.PacketSummary{ID: packetID, Time: p.Time, Interface: p.Interface, Direction: f.Direction, NetworkProtocol: p.Protocol, IPVersion: p.IPVersion, Source: model.Endpoint{IP: p.SrcIP, Port: p.SrcPort}, Destination: model.Endpoint{IP: p.DstIP, Port: p.DstPort}, Length: len(p.Raw), TCPFlags: decode.TCPFlagsString(p.TCPFlags), ToS: p.ToS, VLANID: p.VLANID, ICMPType: p.ICMPType, ICMPCode: p.ICMPCode, FlowID: f.ID, DPI: di, Attribution: f.Attribution, SensorTraffic: f.SensorTraffic}
 	if proc != nil {
 		cp := *proc
 		packet.Process = &cp
@@ -828,7 +878,7 @@ func uniqueStrings(in []string) []string {
 	return out
 }
 
-func (e *Engine) recordPacket(p *decode.Packet, proc *model.ProcessInfo, attr string, di model.DPIInfo, flowID string, dir model.Direction) string {
+func (e *Engine) recordPacket(p *decode.Packet, proc *model.ProcessInfo, attr string, di model.DPIInfo, flowID string, dir model.Direction, sensorTraffic bool) string {
 	seq := e.packetSeq.Add(1)
 	ps := model.PacketSummary{
 		ID:              strconv.FormatUint(seq, 10),
@@ -848,6 +898,7 @@ func (e *Engine) recordPacket(p *decode.Packet, proc *model.ProcessInfo, attr st
 		FlowID:          flowID,
 		DPI:             di,
 		Attribution:     attr,
+		SensorTraffic:   sensorTraffic,
 	}
 	if proc != nil {
 		cp := *proc
@@ -916,7 +967,20 @@ func (e *Engine) maintenance(ctx context.Context) {
 	}
 }
 
-func (e *Engine) Flows(limit int) []model.Flow   { return e.Store.Snapshot(limit) }
+func (e *Engine) Flows(limit int) []model.Flow { return e.Store.Snapshot(limit) }
+func (e *Engine) VisibleFlows(limit int) []model.Flow {
+	var visible []model.Flow
+	for _, f := range e.Store.Snapshot(0) {
+		if f.SensorTraffic {
+			continue
+		}
+		visible = append(visible, f)
+		if limit > 0 && len(visible) >= limit {
+			break
+		}
+	}
+	return visible
+}
 func (e *Engine) Alerts(limit int) []model.Alert { return e.Anomaly.Alerts(limit) }
 func (e *Engine) Findings(limit int) []model.SecurityFinding {
 	if e.IDS == nil {
@@ -1066,13 +1130,13 @@ func (e *Engine) TimeMachine(at time.Time) map[string]any {
 		}
 	}
 	var flows []model.Flow
-	for _, f := range e.Flows(5000) {
+	for _, f := range e.VisibleFlows(5000) {
 		if !f.LastSeen.Before(from) && !f.FirstSeen.After(to) {
 			flows = append(flows, f)
 		}
 	}
 	var packets []model.PacketSummary
-	for _, p := range e.Packets(1000) {
+	for _, p := range e.VisiblePackets(1000) {
 		if !p.Time.Before(from) && !p.Time.After(to) {
 			packets = append(packets, p)
 		}
@@ -1094,6 +1158,21 @@ func (e *Engine) Packets(limit int) []model.PacketSummary {
 	return out
 }
 
+func (e *Engine) VisiblePackets(limit int) []model.PacketSummary {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if limit <= 0 || limit > len(e.packets) {
+		limit = len(e.packets)
+	}
+	out := make([]model.PacketSummary, 0, limit)
+	for i := len(e.packets) - 1; i >= 0 && len(out) < limit; i-- {
+		if !e.packets[i].SensorTraffic {
+			out = append(out, e.packets[i])
+		}
+	}
+	return out
+}
+
 func (e *Engine) Packet(id string) (model.PacketSummary, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -1106,7 +1185,7 @@ func (e *Engine) Packet(id string) (model.PacketSummary, bool) {
 }
 
 func (e *Engine) Status() model.Status {
-	total, active := e.Store.Counts()
+	total, active, processes := e.Store.VisibleCounts()
 	ac, crit := e.Anomaly.Counts()
 	fc, fcrit, confirmed := 0, 0, 0
 	for _, f := range e.Findings(0) {
@@ -1118,7 +1197,7 @@ func (e *Engine) Status() model.Status {
 			confirmed++
 		}
 	}
-	s := model.Status{StartedAt: e.Started, UptimeSeconds: int64(time.Since(e.Started).Seconds()), CaptureMode: e.Config.Capture.Backend, Flows: total, ActiveFlows: active, Processes: e.Store.ProcessCount(), Alerts: ac, CriticalAlerts: crit, SecurityFindings: fc, CriticalFindings: fcrit, ConfirmedFindings: confirmed, ProcessMapAgeMS: e.Proc.Age().Milliseconds(), AttributionBackend: e.attributionBackend, AFXDPAvailable: e.afxdpAvailable, AFXDPReason: e.afxdpReason}
+	s := model.Status{StartedAt: e.Started, UptimeSeconds: int64(time.Since(e.Started).Seconds()), CaptureMode: e.Config.Capture.Backend, Flows: total, ActiveFlows: active, Processes: processes, Alerts: ac, CriticalAlerts: crit, SecurityFindings: fc, CriticalFindings: fcrit, ConfirmedFindings: confirmed, ProcessMapAgeMS: e.Proc.Age().Milliseconds(), AttributionBackend: e.attributionBackend, AFXDPAvailable: e.afxdpAvailable, AFXDPReason: e.afxdpReason}
 	if e.ThreatIntel != nil {
 		s.ThreatIndicators = e.ThreatIntel.Count()
 	}
@@ -1216,7 +1295,7 @@ func (e *Engine) Processes() []ProcessSummary {
 		d map[string]bool
 	}
 	m := map[string]*acc{}
-	for _, f := range e.Store.Snapshot(0) {
+	for _, f := range e.VisibleFlows(0) {
 		if f.Process == nil {
 			continue
 		}
@@ -1354,7 +1433,7 @@ func (e *Engine) addRuntimeEvent(ev model.RuntimeEvent) {
 	if e.EventBus != nil {
 		e.EventBus.Publish(eventbus.Event{Time: ev.Time, Category: "runtime", Type: ev.Kind, Severity: "info", Payload: ev})
 	}
-	if e.Analytics != nil {
+	if ev.PID != os.Getpid() && e.Analytics != nil {
 		_ = e.Analytics.Append(analytics.Event{Time: ev.Time, Type: "runtime", Process: ev.Comm, Destination: ev.Remote.IP, Key: ev.Kind, Meta: map[string]any{"pid": ev.PID, "ppid": ev.PPID, "path": ev.Path, "source": ev.Source}})
 	}
 	if e.RuntimeAnomaly != nil && e.IDS != nil {
@@ -1368,13 +1447,15 @@ func (e *Engine) addRuntimeEvent(ev model.RuntimeEvent) {
 func (e *Engine) RuntimeEvents(limit int) []model.RuntimeEvent {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	n := len(e.runtimeEvents)
-	if limit <= 0 || limit > n {
-		limit = n
-	}
-	out := append([]model.RuntimeEvent(nil), e.runtimeEvents[n-limit:]...)
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
+	out := make([]model.RuntimeEvent, 0)
+	for i := len(e.runtimeEvents) - 1; i >= 0; i-- {
+		if e.runtimeEvents[i].PID == os.Getpid() {
+			continue
+		}
+		out = append(out, e.runtimeEvents[i])
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	return out
 }
@@ -1436,10 +1517,10 @@ func (e *Engine) threatFinding(f model.Flow, p *decode.Packet, packetID string, 
 }
 
 func (e *Engine) Graph(limit int) investigation.Graph {
-	return investigation.BuildExtended(e.Flows(limit), e.Findings(limit), e.FilesList(limit), limit)
+	return investigation.BuildExtended(e.VisibleFlows(limit), e.Findings(limit), e.FilesList(limit), limit)
 }
 func (e *Engine) GraphQuery(q investigation.Query) investigation.Graph {
-	return investigation.BuildQuery(e.Flows(10000), e.Findings(10000), e.FilesList(10000), q)
+	return investigation.BuildQuery(e.VisibleFlows(10000), e.Findings(10000), e.FilesList(10000), q)
 }
 func (e *Engine) ThreatIndicators() []threatintel.Indicator {
 	if e.ThreatIntel == nil {
@@ -1530,6 +1611,71 @@ func (e *Engine) AddCaseNote(id, author, text string) (cases.Case, error) {
 		return cases.Case{}, fmt.Errorf("case store unavailable")
 	}
 	return e.Cases.AddNote(id, author, text)
+}
+func (e *Engine) CaptureCaseTriage(ctx context.Context, id, actor string) (cases.Case, error) {
+	if e.Cases == nil {
+		return cases.Case{}, fmt.Errorf("case store unavailable")
+	}
+	c, err := e.Cases.Get(id)
+	if err != nil {
+		return cases.Case{}, err
+	}
+	if c.Locked {
+		return cases.Case{}, fmt.Errorf("case is locked in forensic immutable mode")
+	}
+	if len(c.TriageSnapshots) >= triage.MaxSnapshotsPerCase {
+		return cases.Case{}, fmt.Errorf("case triage snapshot limit reached")
+	}
+	if len(c.Findings) == 0 {
+		return cases.Case{}, fmt.Errorf("case has no finding for process triage")
+	}
+	finding := c.Findings[0]
+	pid := finding.PID
+	if pid <= 1 {
+		for _, flow := range c.Flows {
+			if flow.ID == finding.FlowID && flow.Process != nil {
+				pid = flow.Process.PID
+				break
+			}
+		}
+	}
+	if pid <= 1 {
+		return cases.Case{}, fmt.Errorf("finding has no attributed local process")
+	}
+	expectedComm, expectedExe := finding.Process, ""
+	var expectedStart uint64
+	for _, flow := range c.Flows {
+		if flow.ID == finding.FlowID && flow.Process != nil && flow.Process.PID == pid {
+			if expectedComm == "" {
+				expectedComm = flow.Process.Comm
+			}
+			expectedExe = flow.Process.Exe
+			expectedStart = flow.Process.StartTimeTicks
+			break
+		}
+	}
+	if expectedStart == 0 {
+		for _, process := range c.Processes {
+			if process.PID != pid {
+				continue
+			}
+			if expectedComm == "" {
+				expectedComm = process.Comm
+			}
+			if expectedExe == "" {
+				expectedExe = process.Exe
+			}
+			expectedStart = process.StartTimeTicks
+			break
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	snapshot, err := triage.Collect(ctx, pid, expectedStart, expectedComm, expectedExe, actor, finding.ID, finding.Time)
+	if err != nil {
+		return cases.Case{}, err
+	}
+	return e.Cases.AddTriage(id, snapshot)
 }
 func (e *Engine) ExportCase(id string) (string, error) {
 	if e.Cases == nil {
@@ -1715,5 +1861,5 @@ func (e *Engine) AskAnalyst(ctx context.Context, q string) (analyst.Answer, erro
 	if e.Analyst == nil {
 		return analyst.Answer{}, fmt.Errorf("analyst unavailable")
 	}
-	return e.Analyst.Ask(ctx, analyst.EvidencePack{Query: q, Flows: e.Flows(300), Findings: e.Findings(300), Files: e.FilesList(100), Packets: e.Packets(200)})
+	return e.Analyst.Ask(ctx, analyst.EvidencePack{Query: q, Flows: e.VisibleFlows(300), Findings: e.Findings(300), Files: e.FilesList(100), Packets: e.VisiblePackets(200)})
 }

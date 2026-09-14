@@ -40,6 +40,16 @@ func TestRanges(t *testing.T) {
 	}
 }
 
+func TestSensorTrafficDoesNotEnterLiveSeries(t *testing.T) {
+	s := New(nil, 10)
+	now := time.Now().UTC()
+	s.consume(eventbus.Event{Time: now, Type: "packet_metadata", Payload: model.PacketSummary{Direction: model.DirectionOutbound, Length: 100, FlowID: "sensor", SensorTraffic: true}})
+	s.consume(eventbus.Event{Time: now, Type: "packet_metadata", Payload: model.PacketSummary{Direction: model.DirectionOutbound, Length: 200, FlowID: "other"}})
+	if s.current.OutBytes != 200 || s.current.OutPackets != 1 || s.current.Flows != 1 {
+		t.Fatalf("unexpected visible live counters: %+v", s.current)
+	}
+}
+
 func TestTwentyFourHourHistoryIsDownsampledAndBounded(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	s := New(nil, 90000)

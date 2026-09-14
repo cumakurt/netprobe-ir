@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"io"
 	"netprobe-ir/internal/evidence"
+	"netprobe-ir/internal/triage"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,6 +30,10 @@ func TestCaseLifecycleAndExport(t *testing.T) {
 	if e != nil || len(c.Notes) != 1 {
 		t.Fatal(e, c)
 	}
+	c, e = s.AddTriage(c.ID, triage.Snapshot{CollectedBy: "analyst", FindingID: "finding-1", Process: triage.Process{PID: 4242, Comm: "worker"}})
+	if e != nil || len(c.TriageSnapshots) != 1 {
+		t.Fatal(e, c)
+	}
 	dst := filepath.Join(d, "exports", c.ID+".zip")
 	if _, e = s.Export(c.ID, dst); e != nil {
 		t.Fatal(e)
@@ -42,7 +47,7 @@ func TestCaseLifecycleAndExport(t *testing.T) {
 	for _, f := range zr.File {
 		names[f.Name] = true
 	}
-	if !names["case.json"] || !names["manifest.json"] || !names["x.pcapng"] {
+	if !names["case.json"] || !names["manifest.json"] || !names["x.pcapng"] || !names["triage-001.json"] {
 		t.Fatal(names)
 	}
 	verifyDir := filepath.Join(d, "verify")

@@ -89,7 +89,7 @@ func (s *Server) collectAssets() []assetView {
 		}
 		return a
 	}
-	flows := s.Engine.Flows(10000)
+	flows := s.Engine.VisibleFlows(10000)
 	for _, f := range flows {
 		keys := []string{}
 		if f.Process != nil {

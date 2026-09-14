@@ -13,6 +13,18 @@ Bu dizin NetProbe IR 1.0.0'ın sürümlenmiş teknik ve operasyonel belgelerini 
 - [Web konsolu tasarımı](UI_DESIGN_TR.md) — etkileşim modeli, erişilebilirlik ve kanıt odaklı arayüz kararları.
 - [Tedarik zinciri kontrolleri](SUPPLY_CHAIN_TR.md) — SBOM, provenance, sağlama toplamları ve isteğe bağlı imzalar.
 
+## Konsol görüntüleri
+
+Bu güncel konsol görüntülerindeki veriler sentetiktir; gerçek bir siber olay kanıtı değildir. Diğer ekranlar için [ürün turuna](../README_TR.md#ürün-turu) bakın.
+
+<p align="center">
+  <a href="../img/traffic-rankings.png"><img src="../img/traffic-rankings.png" alt="Top Analytics ekranında sentetik trafik inceleme sıralamaları" width="800"></a>
+</p>
+
+<p align="center">
+  <a href="../img/incident-case.png"><img src="../img/incident-case.png" alt="Korunmuş bulgular ve host triage içeren sentetik olay dosyası" width="800"></a>
+</p>
+
 ## Operasyon ve tespit
 
 - [Kimlik doğrulama ve SOC güvenliği](AUTH_SECURITY_TR.md)

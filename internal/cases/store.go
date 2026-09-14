@@ -16,6 +16,7 @@ import (
 
 	"netprobe-ir/internal/evidence"
 	"netprobe-ir/internal/model"
+	"netprobe-ir/internal/triage"
 )
 
 type Note struct {
@@ -24,24 +25,25 @@ type Note struct {
 	Text   string    `json:"text"`
 }
 type Case struct {
-	ID         string                  `json:"id"`
-	Title      string                  `json:"title"`
-	Status     string                  `json:"status"`
-	Severity   string                  `json:"severity"`
-	CreatedAt  time.Time               `json:"created_at"`
-	UpdatedAt  time.Time               `json:"updated_at"`
-	FindingIDs []string                `json:"finding_ids,omitempty"`
-	FlowIDs    []string                `json:"flow_ids,omitempty"`
-	PacketIDs  []string                `json:"packet_ids,omitempty"`
-	Processes  []model.ProcessInfo     `json:"processes,omitempty"`
-	Findings   []model.SecurityFinding `json:"findings,omitempty"`
-	Flows      []model.Flow            `json:"flows,omitempty"`
-	Packets    []model.PacketSummary   `json:"packets,omitempty"`
-	PCAPFiles  []string                `json:"pcap_files,omitempty"`
-	Notes      []Note                  `json:"notes,omitempty"`
-	Tags       []string                `json:"tags,omitempty"`
-	Locked     bool                    `json:"locked"`
-	LockedAt   *time.Time              `json:"locked_at,omitempty"`
+	ID              string                  `json:"id"`
+	Title           string                  `json:"title"`
+	Status          string                  `json:"status"`
+	Severity        string                  `json:"severity"`
+	CreatedAt       time.Time               `json:"created_at"`
+	UpdatedAt       time.Time               `json:"updated_at"`
+	FindingIDs      []string                `json:"finding_ids,omitempty"`
+	FlowIDs         []string                `json:"flow_ids,omitempty"`
+	PacketIDs       []string                `json:"packet_ids,omitempty"`
+	Processes       []model.ProcessInfo     `json:"processes,omitempty"`
+	Findings        []model.SecurityFinding `json:"findings,omitempty"`
+	Flows           []model.Flow            `json:"flows,omitempty"`
+	Packets         []model.PacketSummary   `json:"packets,omitempty"`
+	PCAPFiles       []string                `json:"pcap_files,omitempty"`
+	TriageSnapshots []triage.Snapshot       `json:"triage_snapshots,omitempty"`
+	Notes           []Note                  `json:"notes,omitempty"`
+	Tags            []string                `json:"tags,omitempty"`
+	Locked          bool                    `json:"locked"`
+	LockedAt        *time.Time              `json:"locked_at,omitempty"`
 }
 type Store struct {
 	mu        sync.Mutex
@@ -115,6 +117,15 @@ func (s *Store) AddNote(id, author, text string) (Case, error) {
 	}
 	return s.Update(id, func(c *Case) error {
 		c.Notes = append(c.Notes, Note{Time: time.Now().UTC(), Author: author, Text: text})
+		return nil
+	})
+}
+func (s *Store) AddTriage(id string, snapshot triage.Snapshot) (Case, error) {
+	return s.Update(id, func(c *Case) error {
+		if len(c.TriageSnapshots) >= triage.MaxSnapshotsPerCase {
+			return fmt.Errorf("case triage snapshot limit reached")
+		}
+		c.TriageSnapshots = append(c.TriageSnapshots, snapshot)
 		return nil
 	})
 }
@@ -213,6 +224,17 @@ func (s *Store) Export(id, dst string) (string, error) {
 		return "", err
 	}
 	paths := []string{casePath}
+	for i, snapshot := range c.TriageSnapshots {
+		b, err := json.MarshalIndent(snapshot, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		path := filepath.Join(tmp, fmt.Sprintf("triage-%03d.json", i+1))
+		if err = os.WriteFile(path, b, 0600); err != nil {
+			return "", err
+		}
+		paths = append(paths, path)
+	}
 	for _, p := range c.PCAPFiles {
 		if st, e := os.Stat(p); e == nil && !st.IsDir() {
 			dstp := filepath.Join(tmp, filepath.Base(p))

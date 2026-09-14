@@ -28,3 +28,7 @@ func (t *Tracker) LookupFresh(proto, src string, sp uint16, dst string, dp uint1
 func (t *Tracker) Lookup(proto, src string, sp uint16, dst string, dp uint16, dir model.Direction) (*model.ProcessInfo, string) {
 	return nil, "unsupported-platform"
 }
+func (t *Tracker) OwnsConnection(proto, src string, sp uint16, dst string, dp uint16, pid int) bool {
+	return false
+}
+func (t *Tracker) IsLocalAddress(ip string) bool { return false }

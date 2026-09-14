@@ -11,6 +11,19 @@ No page reload or external chart/font/icon service is required.
   Capture filters, snap length, decoding failures and capture drops affect coverage.
   Replay frames are excluded. These are observations, not estimates of unsampled
   traffic, payload goodput, or deduplicated packets on the entire network.
+- Live traffic summaries exclude packets confidently linked to the running
+  NetProbe process by its PID or owned socket endpoints. TCP packets involving
+  the configured local console listener are also excluded, including a loopback
+  client whose own process is attributed to the packet. Flow, packet, process,
+  hunt and investigation lists hide those observations by default. The live
+  traffic series, Top Analytics, overview flow/process counts, new advanced
+  analytics flow records, network baselines and DNS/TLS summaries use the same
+  exclusion. Runtime event lists hide events attributed to the sensor PID.
+  This is a display filter: raw captured
+  flow/packet evidence and security findings remain available to detection and
+  direct evidence access. Capture device counters and status packet/byte totals
+  remain raw health measurements. Unattributed traffic with no matching owned
+  socket can still appear; process names alone never trigger exclusion.
 - Inbound/outbound/forwarded/unknown are mutually exclusive host-relative
   directions. Forwarded observations count once. A wire packet captured on two
   interfaces contributes two observations to global counters. Loopback can also
@@ -33,7 +46,7 @@ No page reload or external chart/font/icon service is required.
   every closed connection. The longest-open ranking excludes FIN/RST flows.
 - Traffic rankings and protocol/application distributions are cumulative since
   telemetry startup. **Chart range** controls the time-series window only.
-  **Filter Top rows** searches the server's returned Top results, not all flows or
+  **Filter rankings** searches the server's returned Top results, not all flows or
   counters. The existing Focus/Hunt tools remain available for forensic filtering.
 - Port rankings count both source and destination port incidences (identical
   ports once per packet). They include ephemeral client ports. Endpoint volume
@@ -67,11 +80,16 @@ The server returns at most 20 rows per ranking; the UI pages five rows at a time
 Snapshots are cached per scope for one second. Top-flow selection retains only
 20 candidates per metric, avoiding full-flow sorting/copies on every client update.
 
+The UI presents four primary metrics (live throughput, new TCP SYNs, active flows,
+and captured volume), a current-interval direction-share bar, a live history chart,
+protocol and application-visibility distributions, and six investigation rankings.
+The rankings cover sources, destinations, TCP connection initiators, TCP ports,
+observed applications, and largest retained flows. Horizontal rank bars compare
+each value with the leading returned row; they do not imply a share of all traffic.
+Distribution shares are calculated from the returned groups. Methodology is
+available in a collapsed panel so important capture limitations remain accessible.
 The UI preserves inputs and DOM nodes between updates, stops streams while hidden,
-closes them on navigation/logout/pause, and reconnects after disconnection. Motion
-stops when telemetry is stale or paused and honors `prefers-reduced-motion`. Arrow
-width and speed increase monotonically with observed bitrate and packet rate;
-exact measurements remain visible beside them.
+closes them on navigation/logout/pause, and reconnects after disconnection.
 
 ## API
 
